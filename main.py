@@ -29,17 +29,6 @@ session_uuids = np.array(session_uuids)
 from models import expSmoothing_stimside, expSmoothing_prevAction, smoothing_stimside
 
 # get prior
-smoothing_s = smoothing_stimside.smoothing_stimside('./results/', session_uuids, mice_names[0], actions, stimuli, stim_side)
-smoothing_s.load_or_train(sessions_id=np.array([0,1]), nb_steps=1000, std_RW=0.05, remove_old=False)
-loglkd, accuracy = smoothing_s.score(sessions_id_test=np.array([2]), sessions_id=np.array([0, 1]))
-
-expSmoothing_s = expSmoothing_stimside.expSmoothing_stimside('./results/', session_uuids, mice_names[0], actions, stimuli, stim_side)
-expSmoothing_s.load_or_train(sessions_id=np.array([0, 1]), nb_steps=1000, std_RW=0.02, remove_old=True)
-loglkd, accuracy = expSmoothing_s.score(sessions_id_test=np.array([3]), sessions_id=np.array([0, 1, 2, 4, 5]))
-print(accuracy)
-
-expSmoothing_a = expSmoothing_prevAction.expSmoothing_prevAction('./results/', session_uuids, mice_names[0], actions, stimuli, stim_side)
-expSmoothing_a.load_or_train(sessions_id=np.array([0, 1]), nb_steps=1000, std_RW=0.02, remove_old=True)
-loglkd, accuracy = expSmoothing_a.score(sessions_id_test=np.array([2]), sessions_id=np.array([0, 1]))
-print(accuracy)
-
+model = smoothing_stimside.smoothing_stimside('./results/', session_uuids, mice_names[0], actions, stimuli, stim_side)
+model.load_or_train(nb_steps=1000, std_RW=0.05, remove_old=False)
+priors, loglkd, acc = model.compute_prior(actions, stimuli, stim_side)
