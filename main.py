@@ -5,6 +5,7 @@ from oneibl.one import ONE
 one = ONE()
 mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
 stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
+mouse_name = 'SWC_038'
 for i in range(len(sess_id)):
 	if mice_names[i] == mice_names[1]: # take only sessions of first mice
 	    data = utils.load_session(sess_id[i])
@@ -14,7 +15,6 @@ for i in range(len(sess_id)):
 	        actions_arr.append(actions)
 	        stim_sides_arr.append(stim_side)
 	        session_uuids.append(sess_id[i])
-
 
 # get maximum number of trials across sessions
 max_len = np.array([len(stimuli_arr[k]) for k in range(len(stimuli_arr))]).max()
@@ -29,6 +29,7 @@ session_uuids = np.array(session_uuids)
 from models import expSmoothing_stimside, expSmoothing_prevAction, smoothing_stimside
 
 # get prior
-model = smoothing_stimside.smoothing_stimside('./results/', session_uuids, mice_names[0], actions, stimuli, stim_side)
+model = smoothing_stimside.smoothing_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
 model.load_or_train(nb_steps=1000, std_RW=0.05, remove_old=False)
+#model.get_parameters() # get parameters
 priors, loglkd, acc = model.compute_prior(actions, stimuli, stim_side)
