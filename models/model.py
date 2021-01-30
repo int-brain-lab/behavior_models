@@ -37,8 +37,8 @@ class Model():
         if not os.path.exists(self.path_to_results):
             os.mkdir(self.path_to_results)
         self.path_results_mouse = self.path_to_results + self.mouse_name +'/model_{}_'.format(self.name)
-        if not os.path.exists(self.path_results_mouse):
-            os.mkdir(self.path_results_mouse)
+        if not os.path.exists(self.path_to_results + self.mouse_name):
+            os.mkdir(self.path_to_results + self.mouse_name)
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point):
@@ -214,15 +214,15 @@ class Model():
             parameters_chosen = self.params_list[int(nb_steps/2):].mean(axis=(0,1))[np.newaxis]
         elif parameter_type=='maximum_a_posteriori':
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))
-            parameters_chosen = self.params_list[xmax, ymax]
+            parameters_chosen = self.params_list[xmax[0], ymax[0]][np.newaxis]
         if len(act.shape)==1:
             act, stim, side = act[np.newaxis], stim[np.newaxis], side[np.newaxis]
         loglkd, priors = self.evaluate(parameters_chosen, return_details=True, act=act, stim=stim, side=side)
-        accuracy = np.exp(loglkd/np.prod(act.shape))
+        accuracy = np.exp(loglkd/np.sum(act!=0))
 
         return np.squeeze(priors), loglkd, accuracy
 
-    def score(self, sessions_id_test, sessions_id, parameter_type='posterior_mean', train_method='MCMC', remove_old=False):
+    def score(self, sessions_id_test, sessions_id, parameter_type='posterior_mean', train_method='MCMC', remove_old=False, param=None):
         '''
         Scores the model on session_id. NB: to implement cross validation, do not train and test on the same sessions
         Params:
@@ -234,19 +234,28 @@ class Model():
         Outputs:
             accuracy and loglkd on new sessions
         '''
-        path = self.build_path(train_method, self.session_uuids[sessions_id], self.session_uuids[sessions_id_test])        
-        if remove_old and os.path.exists(path):
+        path = self.build_path(train_method, self.session_uuids[sessions_id], self.session_uuids[sessions_id_test])
+        if (remove_old or param is not None) and os.path.exists(path):
             os.remove(path)
         elif os.path.exists(path):
             [prior, loglkd, accuracy] = pickle.load(open(path, 'rb'))
             print('saved score results found')
+            print('accuracy on test sessions: {}'.format(accuracy))
             return loglkd, accuracy
 
         self.load(sessions_id, train_method)
         act, stim, side = self.actions[sessions_id_test], self.stimuli[sessions_id_test], self.stim_side[sessions_id_test]
-        prior, loglkd, accuracy = self.compute_prior(act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, train_method=train_method)
-        pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
-        print('accuracy on test sessions: {}'.format(accuracy))
+
+        if param is not None:
+            print('custom parameters: {}'.format(param))
+            loglkd, priors = self.evaluate(param[np.newaxis], return_details=True, act=act, stim=stim, side=side)
+            accuracy = np.exp(loglkd/np.sum(act!=0))
+            print('accuracy on test sessions: {}'.format(accuracy))
+            return loglkd, accuracy
+        else:
+            prior, loglkd, accuracy = self.compute_prior(act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, train_method=train_method)
+            pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
+            print('accuracy on test sessions: {}'.format(accuracy))
         return loglkd, accuracy
 
 
@@ -267,7 +276,7 @@ class Model():
             return path
         else:
             str_sessionuuids_test = ''
-            for k in range(len(l_sessionuuids_test)): str_sessionuuids += '_sess{}_{}'.format(k+1, l_sessionuuids_test[k])            
+            for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_sess{}_{}'.format(k+1, l_sessionuuids_test[k])
             path = self.path_results_mouse + 'train_{}_train{}_test{}.pkl'.format(train_method, str_sessionuuids, str_sessionuuids_test)
             return path
 
@@ -301,7 +310,7 @@ class Model():
             return parameters_chosen
         elif parameter_type=='maximum_a_posteriori':
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))
-            parameters_chosen = self.params_list[xmax, ymax]
+            parameters_chosen = self.params_list[xmax[0], ymax[0]]
             return parameters_chosen
         else:
             return self.params_list

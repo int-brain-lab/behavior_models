@@ -5,9 +5,9 @@ from oneibl.one import ONE
 one = ONE()
 mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
 stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
-mouse_name = 'SWC_038'
+mouse_name = 'NYU-12'
 for i in range(len(sess_id)):
-	if mice_names[i] == mice_names[1]: # take only sessions of first mice
+	if mice_names[i] == mouse_name: # take only sessions of first mice
 	    data = utils.load_session(sess_id[i])
 	    if data['choice'] is not None and data['probabilityLeft'][0]==0.5:
 	        stim_side, stimuli, actions, pLeft_oracle = utils.format_data(data)
@@ -30,6 +30,12 @@ from models import expSmoothing_stimside, expSmoothing_prevAction, smoothing_sti
 
 # get prior
 model = smoothing_stimside.smoothing_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
-model.load_or_train(nb_steps=1000, std_RW=0.05, remove_old=False)
-#model.get_parameters() # get parameters
-priors, loglkd, acc = model.compute_prior(actions, stimuli, stim_side)
+model.load_or_train(sessions_id=np.array([0,1,2,3]), nb_steps=1000, std_RW=0.02, remove_old=False)
+parameters = model.get_parameters(parameter_type='all')
+p =  parameters[500:].mean(axis=(0,1))
+p[:20] = np.random.rand(20)
+loglkd, acc = model.score(sessions_id_test=np.array([4]), sessions_id=np.array([0,1,2,3]), param=p)
+
+# model.load_or_train(nb_steps=1000, std_RW=0.02, remove_old=False)
+# parameters = model.get_parameters(parameter_type='all') # get parameters
+# priors, loglkd, acc = model.score(actions, stimuli, stim_side)
