@@ -15,15 +15,11 @@ class expSmoothing_prevAction(model.Model):
         nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params)
 
-    def evaluate(self, arr_params, sessions_id=None, return_details=False, **kwargs):
-        if sessions_id is None and 'act' not in kwargs.keys():
-            assert(False), 'session ids must be specified or explicit action/stimuli/stim_side must be passed in kwargs'
+    def compute_lkd(arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)
         alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T      
         loglikelihood = np.zeros(nb_chains)
-        act = torch.tensor(utils.look_up(kwargs, 'act', self.actions[sessions_id]))
-        stim = torch.tensor(utils.look_up(kwargs, 'stim', self.stimuli[sessions_id]))
-        side = torch.tensor(utils.look_up(kwargs, 'side', self.stim_side[sessions_id]))
+        act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
 
         values = torch.zeros([nb_sessions, nb_chains, self.nb_trials, 2], dtype=torch.float64) + 0.5

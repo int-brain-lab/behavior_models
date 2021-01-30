@@ -84,7 +84,6 @@ class Model():
 
     def evaluate(self, arr_params, sessions_id, return_details=False, **kwargs):
         '''
-        Return the likelihood, this method must be defined in your descendant class
         Params:
             arr_params (nd array of size [nb_chains, nb_params]): parameters for which the likelihood will
             be computed
@@ -93,6 +92,17 @@ class Model():
             return_details (boolean): if true returns the prior + the loglikelihood. if false, only returns the loglikelihood
         Output:
             the loglikelihood (of size [nb_sessions, nb_chains])
+        '''
+        if sessions_id is None and 'act' not in kwargs.keys():
+            assert(False), 'session ids must be specified or explicit action/stimuli/stim_side must be passed in kwargs'
+        act = utils.look_up(kwargs, 'act', self.actions[sessions_id])
+        stim = utils.look_up(kwargs, 'stim', self.stimuli[sessions_id])
+        side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])
+        return self.compute_lkd(arr_params, act, stim, side, return_details)
+
+    def compute_lkd(arr_params, act, stim, side, return_details):
+        '''
+            Return the likelihood, this method must be defined in your descendant class
         '''
         return NotImplemented
 
