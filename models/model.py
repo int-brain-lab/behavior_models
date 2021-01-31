@@ -82,7 +82,7 @@ class Model():
         print('acceptance ratio is of {}. Careful, this ratio should be close to 0.15. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
         return np.array(params_list), np.array(lkd_list)
 
-    def evaluate(self, arr_params, sessions_id, return_details=False, **kwargs):
+    def evaluate(self, arr_params, sessions_id=None, return_details=False, **kwargs):
         '''
         Params:
             arr_params (nd array of size [nb_chains, nb_params]): parameters for which the likelihood will

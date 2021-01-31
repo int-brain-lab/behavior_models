@@ -12,10 +12,10 @@ class expSmoothing_prevAction(model.Model):
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
         name = 'expSmoothingPrevActions'
-        nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
+        nb_params, lb_params, ub_params = 5, np.array([0, 0.5, 0.5, 0, 0]), np.array([1, 1, 1, .5, .5])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params)
 
-    def compute_lkd(arr_params, act, stim, side, return_details):
+    def compute_lkd(self, arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)
         alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T      
         loglikelihood = np.zeros(nb_chains)

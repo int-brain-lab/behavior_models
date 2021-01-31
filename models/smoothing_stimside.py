@@ -16,7 +16,7 @@ class smoothing_stimside(model.Model):
         nb_params, lb_params, ub_params = self.nb_pastpoints + 4, np.zeros([self.nb_pastpoints + 4]), np.ones([self.nb_pastpoints + 4])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params)
 
-    def compute_lkd(arr_params, act, stim, side, return_details):
+    def compute_lkd(self, arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)
         alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params)[:, :self.nb_pastpoints],torch.tensor(arr_params)[:, self.nb_pastpoints],torch.tensor(arr_params)[:, (self.nb_pastpoints+1)],torch.tensor(arr_params)[:, (self.nb_pastpoints+2)],torch.tensor(arr_params)[:, (self.nb_pastpoints+3)] 
         loglikelihood = np.zeros(nb_chains)
