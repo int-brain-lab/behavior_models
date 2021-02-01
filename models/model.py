@@ -26,6 +26,7 @@ class Model():
             ub_params (array of floats): upperboud bounds of parameters (e.g., if `nb_params=3`, np.array([1, 1, np.inf]))
         '''
         self.name = name
+        print('')
         print('Initializing {} model'.format(name))
         self.path_to_results = path_to_results        
         self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side

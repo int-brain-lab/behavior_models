@@ -13,7 +13,7 @@ class expSmoothing_stimside(model.Model):
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
         name = 'expSmoothingStimSides'
         nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
-        std_RW = np.array([0.02, 0.02, 0.02, 0.01, 0.01])
+        std_RW = np.array([0.04, 0.02, 0.02, 0.01, 0.01])
         initial_point = np.array([0.5, 0.5, 0.5, 0.1, 0.1])        
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
 

@@ -1,10 +1,12 @@
-# import data
+# load ONE and mice
 import numpy as np
 import utils
 from oneibl.one import ONE
 one = ONE()
 mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
 stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
+
+# select particular mice
 mouse_name = 'NYU-12'
 for i in range(len(sess_id)):
 	if mice_names[i] == mouse_name: # take only sessions of first mice
@@ -26,19 +28,14 @@ stim_side    = np.array([np.concatenate((stim_sides_arr[k], np.zeros(max_len-len
 session_uuids = np.array(session_uuids)
 
 # import models
-from models import expSmoothing_stimside, expSmoothing_prevAction, smoothing_stimside, optimalBayesian, biasedBayesian
+from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
+from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
+from models.optimalBayesian import optimal_Bayesian as optBay
+from models.biasedBayesian import biased_Bayesian as baisedBay
 
-# act, stim, side = actions, stimuli, stim_side
-# arr_params = np.tile(((model.ub_params + model.lb_params)/2.)[np.newaxis], (3, 1))
-# arr_params = np.tile(initial_point[np.newaxis], (3, 1))
-# get prior
-model = biasedBayesian.optimal_Bayesian('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
-model.load_or_train(sessions_id=np.array([0,1,2,3]), nb_steps=1000, remove_old=True)
-parameters = model.get_parameters(parameter_type='all')
-p =  parameters[500:].mean(axis=(0,1))
-p[:20] = np.random.rand(20)
-loglkd, acc = model.score(sessions_id_test=np.array([4]), sessions_id=np.array([0,1,2,3]))
+# load and/or run model
+model = exp_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
+model.load_or_train(nb_steps=1000, remove_old=True) # put 2000 steps for biasedBayesian and 1000 for all others
 
-# model.load_or_train(nb_steps=1000, std_RW=0.02, remove_old=False)
-# parameters = model.get_parameters(parameter_type='all') # get parameters
-# priors, loglkd, acc = model.score(actions, stimuli, stim_side)
+# compute prior
+priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)
