@@ -37,5 +37,5 @@ from models.biasedBayesian import biased_Bayesian as baisedBay
 model = exp_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
 model.load_or_train(nb_steps=1000, remove_old=True) # put 2000 steps for biasedBayesian and 1000 for all others
 
-# compute prior
+# compute prior (actions,  stimuli and stim_side have been passed as arguments to allow pseudo blocks)
 priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)
