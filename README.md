@@ -9,4 +9,4 @@ See the `main.py` file for an example on prior generation
 
 In the `models` folder, you will find a file called `model.py` from which all models inherits. In this file, you will find all the methods to which you have access. The other files defines the specificities for each model.
 
-The inference takes a few minutes but once it has run (and has been saved automatically), computing the prior is very fast (which means you can run this prior computation on a lot of pseudoblocks)
+The inference takes some minutes but once it has run (and has been saved automatically), computing the prior is very fast (which means you can run this prior computation on a lot of pseudoblocks)
