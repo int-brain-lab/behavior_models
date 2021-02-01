@@ -12,6 +12,7 @@ class smoothing_stimside(model.Model):
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
         name = 'smoothingStimSides'
+        return NotImplemented
         self.nb_pastpoints = 20
         nb_params, lb_params, ub_params = self.nb_pastpoints + 4, np.zeros([self.nb_pastpoints + 4]), np.ones([self.nb_pastpoints + 4])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params)

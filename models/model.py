@@ -2,12 +2,13 @@ import numpy as np
 from scipy.stats import truncnorm
 import os, pickle, utils
 from tqdm import tqdm
+from scipy.special import logsumexp
 
 class Model():
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params):
+    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, initial_point=None):
         '''
         Params:
             name (String): name of the model
@@ -25,6 +26,7 @@ class Model():
             ub_params (array of floats): upperboud bounds of parameters (e.g., if `nb_params=3`, np.array([1, 1, np.inf]))
         '''
         self.name = name
+        print('Initializing {} model'.format(name))
         self.path_to_results = path_to_results        
         self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
         if len(self.actions.shape)==1:
@@ -39,6 +41,8 @@ class Model():
         self.path_results_mouse = self.path_to_results + self.mouse_name +'/model_{}_'.format(self.name)
         if not os.path.exists(self.path_to_results + self.mouse_name):
             os.mkdir(self.path_to_results + self.mouse_name)
+        self.std_RW = std_RW
+        self.initial_point = initial_point
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point):
@@ -58,6 +62,8 @@ class Model():
                 assert(False), 'because your bounds are infinite, an initial_point must be specified'
             initial_point = (self.lb_params + self.ub_params)/2.
         
+        print('initial point for MCMC is {}'.format(initial_point))
+        #print('Std of RW is {}'.format(std_RW))
         initial_point = np.tile(initial_point[np.newaxis], (nb_chains, 1))
 
         lkd_list = [self.evaluate(initial_point, sessions_id)]
@@ -126,7 +132,6 @@ class Model():
             self.load(sessions_id, train_method)
             print('results found and loaded')
         else:
-            print('training model')
             self.train(sessions_id, train_method, **kwargs)
 
     def train(self, sessions_id, train_method, **kwargs):
@@ -140,10 +145,10 @@ class Model():
             a saved pickle file with the posterior distribution       
         '''
         if train_method=='MCMC':
-            std_RW = utils.look_up(kwargs, 'std_RW', 1e-2)
+            std_RW = utils.look_up(kwargs, 'std_RW', self.std_RW)
             nb_chains = utils.look_up(kwargs, 'nb_chains', 4)
             nb_steps = utils.look_up(kwargs, 'nb_steps', 1000)
-            initial_point = utils.look_up(kwargs, 'initial_point', None)
+            initial_point = utils.look_up(kwargs, 'initial_point', self.initial_point)
             print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))
             self.params_list, self.lkd_list = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point)
             path = self.build_path(train_method, self.session_uuids[sessions_id])
@@ -186,7 +191,7 @@ class Model():
             print('no results were saved')
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side
-    def compute_prior(self, act, stim, side, sessions_id=None, parameter_type='posterior_mean', train_method='MCMC'):
+    def compute_prior(self, act, stim, side, sessions_id=None, parameter_type='whole_posterior', train_method='MCMC'):
         '''
         Compute_prior method.
         Params:
@@ -216,23 +221,26 @@ class Model():
             assert(parameter_type in ['MAP', 'posterior_mean', 'whole_posterior']), 'parameter_type must be MAP, posterior_mean or whole_posterior'
         if train_method!='MCMC':
             return NotImplemented
-        if train_method=='MCMC' and (parameter_type in ['whole_posterior']):
-            return NotImplemented
 
         if parameter_type=='posterior_mean':
+            print('Using posterior mean')
             nb_steps = len(self.params_list)
-            parameters_chosen = self.params_list[int(nb_steps/2):].mean(axis=(0,1))[np.newaxis]
+            parameters_chosen = self.params_list[-500:].mean(axis=(0,1))[np.newaxis]
         elif parameter_type=='maximum_a_posteriori':
+            print('Using MAP')
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))
             parameters_chosen = self.params_list[xmax[0], ymax[0]][np.newaxis]
+        elif parameter_type=='whole_posterior':
+            print('Using whole posterior')
+            parameters_chosen = self.params_list[-500:].reshape(-1, self.nb_params)
         if len(act.shape)==1:
             act, stim, side = act[np.newaxis], stim[np.newaxis], side[np.newaxis]
         loglkd, priors = self.evaluate(parameters_chosen, return_details=True, act=act, stim=stim, side=side)
-        accuracy = np.exp(loglkd/np.sum(act!=0))
+        llk = logsumexp(loglkd) - np.log(len(loglkd))
+        accuracy = np.exp(llk/np.sum(act!=0))
+        return np.squeeze(np.mean(np.array(priors), axis=1)), llk, accuracy
 
-        return np.squeeze(priors), loglkd, accuracy
-
-    def score(self, sessions_id_test, sessions_id, parameter_type='posterior_mean', train_method='MCMC', remove_old=False, param=None):
+    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', train_method='MCMC', remove_old=False, param=None):
         '''
         Scores the model on session_id. NB: to implement cross validation, do not train and test on the same sessions
         Params:
@@ -316,7 +324,7 @@ class Model():
 
         if parameter_type=='posterior_mean':
             nb_steps = len(self.params_list)
-            parameters_chosen = self.params_list[int(nb_steps/2):].mean(axis=(0,1))
+            parameters_chosen = self.params_list[-500:].mean(axis=(0,1)) # int(nb_steps/2)
             return parameters_chosen
         elif parameter_type=='maximum_a_posteriori':
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))

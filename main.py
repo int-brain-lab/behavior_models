@@ -26,15 +26,18 @@ stim_side    = np.array([np.concatenate((stim_sides_arr[k], np.zeros(max_len-len
 session_uuids = np.array(session_uuids)
 
 # import models
-from models import expSmoothing_stimside, expSmoothing_prevAction, smoothing_stimside
+from models import expSmoothing_stimside, expSmoothing_prevAction, smoothing_stimside, optimalBayesian, biasedBayesian
 
+# act, stim, side = actions, stimuli, stim_side
+# arr_params = np.tile(((model.ub_params + model.lb_params)/2.)[np.newaxis], (3, 1))
+# arr_params = np.tile(initial_point[np.newaxis], (3, 1))
 # get prior
-model = smoothing_stimside.smoothing_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
-model.load_or_train(sessions_id=np.array([0,1,2,3]), nb_steps=1000, std_RW=0.02, remove_old=False)
+model = biasedBayesian.optimal_Bayesian('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
+model.load_or_train(sessions_id=np.array([0,1,2,3]), nb_steps=1000, remove_old=True)
 parameters = model.get_parameters(parameter_type='all')
 p =  parameters[500:].mean(axis=(0,1))
 p[:20] = np.random.rand(20)
-loglkd, acc = model.score(sessions_id_test=np.array([4]), sessions_id=np.array([0,1,2,3]), param=p)
+loglkd, acc = model.score(sessions_id_test=np.array([4]), sessions_id=np.array([0,1,2,3]))
 
 # model.load_or_train(nb_steps=1000, std_RW=0.02, remove_old=False)
 # parameters = model.get_parameters(parameter_type='all') # get parameters
