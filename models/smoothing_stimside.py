@@ -20,6 +20,18 @@ class smoothing_stimside(model.Model):
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
+        '''
+        Generates the loglikelihood (and prior)
+        Params:
+            arr_params (array): parameter of shape [nb_chains, nb_params]
+            act (array of shape [nb_sessions, nb_trials]): action performed by the mice of shape
+            stim (array of shape [nb_sessions, nb_trials]): stimulus contraste (between -1 and 1) observed by the mice
+            side (array of shape [nb_sessions, nb_trials]): stimulus side (-1 (right), 1 (left)) observed by the mice
+            return_details (boolean). If true, only return loglikelihood, else, return loglikelihood and prior
+        Output:
+            loglikelihood (array of length nb_chains): loglikelihood for each chain
+            values (array of shape [nb_sessions, nb_chains, nb_trials, 2]): prior for each chain and session
+        '''        
         nb_chains = len(arr_params)
         alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params)[:, :self.nb_pastpoints],torch.tensor(arr_params)[:, self.nb_pastpoints],torch.tensor(arr_params)[:, (self.nb_pastpoints+1)],torch.tensor(arr_params)[:, (self.nb_pastpoints+2)],torch.tensor(arr_params)[:, (self.nb_pastpoints+3)] 
         loglikelihood = np.zeros(nb_chains)
