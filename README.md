@@ -1,6 +1,6 @@
 # behavior models
 
-This is the readme for the behavioral models. We developped a series of models, for the moment there are 3:
+This is the readme for the behavioral models. We developped a series of models, for the moment there are 4:
 - the exponential smoothing model based on the previous actions
 - the exponential smoothing model based on the previous stimulus sides
 - the optimal Bayesian model. This model performs inference in the generative Bayesian process with the correct parameters (mean block size=50, lower bound=20, upper bound=100, p(stimulus on left side | left block) = 0.8)
