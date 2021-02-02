@@ -12,10 +12,12 @@ class smoothing_stimside(model.Model):
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
         name = 'smoothingStimSides'
-        return NotImplemented
-        self.nb_pastpoints = 20
+        self.nb_pastpoints = 15
         nb_params, lb_params, ub_params = self.nb_pastpoints + 4, np.zeros([self.nb_pastpoints + 4]), np.ones([self.nb_pastpoints + 4])
-        super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params)
+        ub_params[:-2] = .5
+        std_RW = np.array([0.02] * (self.nb_pastpoints + 2) + [0.01, 0.01])
+        initial_point = np.array([0.5] * (self.nb_pastpoints + 2) + [.1, .1])
+        super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)

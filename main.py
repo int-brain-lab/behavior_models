@@ -32,10 +32,11 @@ from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
 from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
 from models.optimalBayesian import optimal_Bayesian as optBay
 from models.biasedBayesian import biased_Bayesian as baisedBay
+from models.smoothing_stimside import smoothing_stimside as smooth_stimside
 
 # load and/or run model
-model = exp_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
-model.load_or_train(nb_steps=1000, remove_old=True) # put 2000 steps for biasedBayesian and 1000 for all others
-
+model = smooth_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
+model.load_or_train(nb_steps=2000, remove_old=False) # put 2000 steps for biasedBayesian and smooth_stimside and 1000 for all others
+param = model.get_parameters(parameter_type='all')
 # compute prior (actions,  stimuli and stim_side have been passed as arguments to allow pseudo blocks)
 priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)

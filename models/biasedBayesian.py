@@ -10,11 +10,16 @@ class biased_Bayesian(model.Model):
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
-        name = 'biased_bayesian'
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
+        name = 'biased_bayesian' + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 8, np.array([0, 0, 0, 0.5, 0, 0, 0, 0]), np.array([40, 50, 50, 1, 1, 1, .5, .5])
         std_RW = np.array([.5, .5, 1, 0.01, 0.01, 0.01, 0.01, 0.01])
         initial_point = np.array([20, 40, 40, 0.8, 0.5, 0.5, 0.1, 0.1])
+        self.repetition_bias = repetition_bias
+        if repetition_bias:
+            nb_params += 1
+            lb_params, ub_params, initial_point = np.append(lb_params, 0), np.append(ub_params, .5), np.append(initial_point, 0)
+            std_RW = np.array([.5, .5, 1, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
         self.nb_blocklengths, self.nb_typeblocks = int(ub_params[:3].sum()), 3
         if torch.cuda.is_available():
@@ -28,7 +33,10 @@ class biased_Bayesian(model.Model):
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)
-        tau0, tau1, tau2, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+        if not self.repetition_bias:
+            tau0, tau1, tau2, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+        else:
+            tau0, tau1, tau2, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
         act, stim, side = torch.tensor(act, device=self.device, dtype=torch.float32), torch.tensor(stim, device=self.device, dtype=torch.float32), torch.tensor(side, device=self.device, dtype=torch.float32)
         nb_sessions = len(act)
         lb, tau, ub = tau0, tau0 + tau1, tau0 + tau1 + tau2
@@ -75,7 +83,15 @@ class biased_Bayesian(model.Model):
         Pis  = predictive[:, :, :, 0] * unsqueeze(gamma) + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - unsqueeze(gamma))
         pRight, pLeft = Pis * Rhos, (1 - Pis) * (1 - Rhos)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
-        pActions = pActions * (1 - lapses) + lapses / 2.
+
+        unsqueezed_lapses = torch.unsqueeze(lapses, 0)
+        if self.repetition_bias:
+            unsqueezed_rep_bias = torch.unsqueeze(torch.unsqueeze(torch.unsqueeze(rep_bias, 0), 0), -1)
+            pActions[:,:,:,0] = pActions[:,:,:,0] * (1 - unsqueezed_lapses[:,:,:,0]) + unsqueezed_lapses[:,:,:,0] / 2.
+            pActions[:,:,:,1:] = pActions[:,:,:,1:] * (1 - unsqueezed_lapses[:,:,:,1:] - unsqueezed_rep_bias) + unsqueezed_lapses[:,:,:,1:] / 2. + unsqueezed_rep_bias * torch.unsqueeze(torch.stack(((act[:,:-1]==-1) * 1, (act[:,:-1]==1) * 1)), 2)
+        else:
+            pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
+
         pActions[torch.isnan(pActions)] = 0
 
         p_ch     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
@@ -88,7 +104,9 @@ class biased_Bayesian(model.Model):
         if self.use_gpu:
             del tau0, tau1, tau2, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg, lb, tau, ub, act, stim, side, s, lks
             del alpha, h, zetas, lapses, b, n, ref, hazard, padding, l, transition, ones, Rhos, gamma_unsqueezed
-            del predictive, Pis, pRight, pLeft, pActions, p_ch
+            del predictive, Pis, pRight, pLeft, pActions, p_ch, unsqueezed_lapses
+            if self.repetition_bias:
+                del rep_bias, unsqueezed_rep_bias
             torch.cuda.empty_cache()
             # print(torch.cuda.memory_allocated())            
             # print(torch.cuda.memory_reserved())

@@ -300,7 +300,7 @@ class Model():
             return path
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side
-    def get_parameters(self, sessions_id=None, parameter_type='posterior_mean', train_method='MCMC'):
+    def get_parameters(self, sessions_id=None, parameter_type='all', train_method='MCMC'):
         '''
         get parameters method.
         Params:

@@ -10,16 +10,24 @@ class expSmoothing_stimside(model.Model):
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
-        name = 'expSmoothingStimSides'
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
+        name = 'expSmoothingStimSides' + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
         std_RW = np.array([0.04, 0.02, 0.02, 0.01, 0.01])
-        initial_point = np.array([0.5, 0.5, 0.5, 0.1, 0.1])        
+        initial_point = np.array([0.5, 0.5, 0.5, 0.1, 0.1])
+        self.repetition_bias = repetition_bias
+        if repetition_bias:
+            nb_params += 1
+            lb_params, ub_params, initial_point = np.append(lb_params, 0), np.append(ub_params, .5), np.append(initial_point, 0)
+            std_RW = np.array([0.02, 0.02, 0.02, 0.01, 0.01, 0.01])        
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)
-        alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        if not self.repetition_bias:
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        else:
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params).T
         loglikelihood = np.zeros(nb_chains)
         act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
@@ -43,7 +51,14 @@ class expSmoothing_stimside(model.Model):
         pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
-        pActions = pActions * (1 - lapses) + lapses / 2.
+        unsqueezed_lapses = torch.unsqueeze(lapses, 0)
+
+        if self.repetition_bias:
+            unsqueezed_rep_bias = torch.unsqueeze(torch.unsqueeze(torch.unsqueeze(rep_bias, 0), 0), -1)            
+            pActions[:,:,:,0] = pActions[:,:,:,0] * (1 - unsqueezed_lapses[:,:,:,0]) + unsqueezed_lapses[:,:,:,0] / 2.
+            pActions[:,:,:,1:] = pActions[:,:,:,1:] * (1 - unsqueezed_lapses[:,:,:,1:] - unsqueezed_rep_bias) + unsqueezed_lapses[:,:,:,1:] / 2. + unsqueezed_rep_bias * torch.unsqueeze(torch.stack(((act[:,:-1]==-1) * 1, (act[:,:-1]==1) * 1)), 2)
+        else:
+            pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
 
         p_ch     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
         p_ch     = torch.minimum(torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8))
