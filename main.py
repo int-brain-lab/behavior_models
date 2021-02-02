@@ -37,6 +37,6 @@ from models.smoothing_stimside import smoothing_stimside as smooth_stimside
 # load and/or run model
 model = smooth_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
 model.load_or_train(nb_steps=2000, remove_old=False) # put 2000 steps for biasedBayesian and smooth_stimside and 1000 for all others
-param = model.get_parameters(parameter_type='all')
+param = model.get_parameters(parameter_type='all') # if you want the parameters
 # compute prior (actions,  stimuli and stim_side have been passed as arguments to allow pseudo blocks)
 priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)
