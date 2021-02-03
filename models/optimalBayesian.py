@@ -13,14 +13,13 @@ class optimal_Bayesian(model.Model):
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
         name = 'optimal_bayesian' + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 4, np.array([0, 0, 0, 0]), np.array([1, 1, .5, .5])
-        initial_point = np.array([0.5, 0.5, 0.1, 0.1])
         std_RW = np.array([0.04, 0.04, 0.01, 0.01])
         self.repetition_bias = repetition_bias
         if repetition_bias:
             nb_params += 1
-            lb_params, ub_params, initial_point = np.append(lb_params, 0), np.append(ub_params, .5), np.append(initial_point, 0)
+            lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
             std_RW = np.array([0.02, 0.02, 0.01, 0.01, 0.01])
-        super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
+        super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
         self.nb_blocklengths, self.nb_typeblocks = 100, 3
         if torch.cuda.is_available():
             self.use_gpu = True
@@ -106,7 +105,7 @@ class optimal_Bayesian(model.Model):
         p_ch     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
 
         p_ch_cpu = torch.tensor(p_ch.detach(), device='cpu')
-        priors   = torch.tensor(Pis.detach(), device='cpu')
+        priors   = 1 - torch.tensor(Pis.detach(), device='cpu')
         logp_ch = torch.log(torch.minimum(torch.maximum(p_ch_cpu, torch.tensor(1e-8)), torch.tensor(1 - 1e-8)))
 
         # clean up gpu memory

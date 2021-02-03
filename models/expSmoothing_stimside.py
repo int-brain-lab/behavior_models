@@ -14,13 +14,12 @@ class expSmoothing_stimside(model.Model):
         name = 'expSmoothingStimSides' + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
         std_RW = np.array([0.04, 0.02, 0.02, 0.01, 0.01])
-        initial_point = np.array([0.5, 0.5, 0.5, 0.1, 0.1])
         self.repetition_bias = repetition_bias
         if repetition_bias:
             nb_params += 1
-            lb_params, ub_params, initial_point = np.append(lb_params, 0), np.append(ub_params, .5), np.append(initial_point, 0)
+            lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
             std_RW = np.array([0.02, 0.02, 0.02, 0.01, 0.01, 0.01])        
-        super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW, initial_point)
+        super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         '''
@@ -76,7 +75,7 @@ class expSmoothing_stimside(model.Model):
         p_ch     = torch.minimum(torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8))
         logp_ch  = torch.log(p_ch)
         if return_details:
-            return np.array(torch.sum(logp_ch, axis=(0, -1))), values
+            return np.array(torch.sum(logp_ch, axis=(0, -1))), values[:, :, :, 1]
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
         
