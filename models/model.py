@@ -166,6 +166,7 @@ class Model():
                     Mu = Mu + Gamma * (param.mean(axis=0) - Mu)
                     Sigma = Sigma + Gamma * (np.cov(param.T) - Sigma)
 
+        print('final posterior_mean is {}'.format(np.array(params_list)[Nburn:].mean(axis=(0,1))))
         acc_ratios = acc_ratios/i
         if i==(nb_steps-1):
             print('Warning : inference has not converged according to Gelman-Rubin')
