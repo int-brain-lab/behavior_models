@@ -93,7 +93,7 @@ class Model():
         print('initial point for MCMC is {}'.format(initial_point))
 
         adaptive_proposal=None
-        lkd_list = [self.evaluate(initial_point, sessions_id)]
+        lkd_list = [self.evaluate(initial_point, sessions_id, clean_up_gpu_memory=False)]
         R_list = []
         params_list = [initial_point]
         acc_ratios = np.zeros([nb_chains])
@@ -102,7 +102,7 @@ class Model():
                 a, b = (self.lb_params - params_list[-1]) / std_RW, (self.ub_params - params_list[-1]) / std_RW
                 proposal = truncnorm.rvs(a, b, params_list[-1], std_RW)
                 a_p, b_p = (self.lb_params - proposal) / std_RW, (self.ub_params - proposal) / std_RW
-                prop_liks = self.evaluate(proposal, sessions_id)
+                prop_liks = self.evaluate(proposal, sessions_id, clean_up_gpu_memory=False)
                 log_alpha = (prop_liks - lkd_list[-1] 
                             + truncnorm.logpdf(params_list[-1], a_p, b_p, proposal, std_RW).sum(axis=1)
                             - truncnorm.logpdf(proposal, a, b, params_list[-1], std_RW).sum(axis=1))
@@ -110,7 +110,7 @@ class Model():
                 proposal = adaptive_proposal(params_list[-1], Sigma, Lambda)
                 valid = np.all((proposal > self.lb_params) * (proposal < self.ub_params), axis=1)
                 proposal_modified = valid[:, np.newaxis] * proposal + (1 - valid[:, np.newaxis]) * initial_point
-                prop_liks = self.evaluate(proposal_modified, sessions_id)
+                prop_liks = self.evaluate(proposal_modified, sessions_id, clean_up_gpu_memory=False)
                 log_alpha = (prop_liks - lkd_list[-1])
                 log_alpha[valid==False] = -np.inf
 
@@ -155,7 +155,7 @@ class Model():
         if i==(nb_steps-1):
             assert(False), 'inference has failed'
 
-        if self.use_gpu:
+        if self.use_gpu: # clean up gpu memory
             torch.cuda.empty_cache()
 
         print('acceptance ratio is of {}. Careful, this ratio should be close to 0.15. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
@@ -175,7 +175,7 @@ class Model():
         R = V/W
         return R
 
-    def evaluate(self, arr_params, sessions_id=None, return_details=False, **kwargs):
+    def evaluate(self, arr_params, sessions_id=None, return_details=False, clean_up_gpu_memory=True, **kwargs):
         '''
         Params:
             arr_params (nd array of size [nb_chains, nb_params]): parameters for which the likelihood will
@@ -190,10 +190,13 @@ class Model():
             assert(False), 'session ids must be specified or explicit action/stimuli/stim_side must be passed in kwargs'
         act = utils.look_up(kwargs, 'act', self.actions[sessions_id])
         stim = utils.look_up(kwargs, 'stim', self.stimuli[sessions_id])
-        side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])        
+        side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            return self.compute_lkd(arr_params, act, stim, side, return_details)
+            res = self.compute_lkd(arr_params, act, stim, side, return_details)
+        if self.use_gpu and clean_up_gpu_memory:
+            torch.cuda.empty_cache()
+        return res            
 
     def compute_lkd(arr_params, act, stim, side, return_details):
         '''
