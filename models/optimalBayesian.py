@@ -116,9 +116,6 @@ class optimal_Bayesian(model.Model):
             if self.repetition_bias:
                 del rep_bias, unsqueezed_rep_bias
             torch.cuda.empty_cache()
-            # print(torch.cuda.memory_allocated())
-            # torch.cuda.empty_cache()
-            # print(torch.cuda.memory_reserved())
 
         if return_details:
             return np.array(torch.sum(logp_ch, axis=(0, -1))), priors

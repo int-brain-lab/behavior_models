@@ -3,6 +3,7 @@ from scipy.stats import truncnorm
 import os, pickle, utils, itertools
 from tqdm import tqdm
 from scipy.special import logsumexp
+import warnings
 
 class Model():
     '''
@@ -142,6 +143,9 @@ class Model():
                     Sigma = Sigma + Gamma * (np.dot((params - Mu).T, (params - Mu)) - Sigma)
 
         acc_ratios = acc_ratios/i
+        if i==(nb_steps-1):
+            assert(False), 'inference has failed'
+
         print('acceptance ratio is of {}. Careful, this ratio should be close to 0.15. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
         return np.array(params_list), np.array(lkd_list), np.array(R_list)
 
@@ -174,8 +178,10 @@ class Model():
             assert(False), 'session ids must be specified or explicit action/stimuli/stim_side must be passed in kwargs'
         act = utils.look_up(kwargs, 'act', self.actions[sessions_id])
         stim = utils.look_up(kwargs, 'stim', self.stimuli[sessions_id])
-        side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])
-        return self.compute_lkd(arr_params, act, stim, side, return_details)
+        side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])        
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return self.compute_lkd(arr_params, act, stim, side, return_details)
 
     def compute_lkd(arr_params, act, stim, side, return_details):
         '''
@@ -242,7 +248,7 @@ class Model():
             try:
                 [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
             except:
-                [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb'))
+                [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb')) # to take out on longer term <- necessary for version continuity
                 pass
         else:
             return NotImplemented
@@ -349,7 +355,6 @@ class Model():
             pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
             print('accuracy on test sessions: {}'.format(accuracy))
         return loglkd, accuracy
-
 
     def build_path(self, train_method, l_sessionuuids_train, l_sessionuuids_test=None):
         '''
