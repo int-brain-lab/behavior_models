@@ -31,8 +31,7 @@ session_uuids = np.array(session_uuids)
 from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
 from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
 from models.optimalBayesian import optimal_Bayesian as optBay
-from models.biasedBayesian import biased_Bayesian as baisedBay
-from models.smoothing_stimside import smoothing_stimside as smooth_stimside
+from models.biasedApproxBayesian import biased_ApproxBayesian as baisedApproxBay
 
 # load and/or run model
 model = smooth_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
