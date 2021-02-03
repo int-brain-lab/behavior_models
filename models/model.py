@@ -66,7 +66,7 @@ class Model():
             initial_point = self.lb_params + grid * (self.ub_params - self.lb_params)
         
         if nb_steps is None:
-            nb_steps, early_stop = int(5000), int(1000), True
+            nb_steps, early_stop = int(5000), True
             if self.nb_params <= 5:
                 Nburn, nb_minimum = 500, 1000
             else:
