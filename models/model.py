@@ -125,7 +125,8 @@ class Model():
             if early_stop and (i > Nburn) and (i > nb_minimum):
                 R = self.inference_validated(np.array(params_list)[Nburn:])
                 R_list.append(R)
-                print(R)
+                if i%100==0:
+                    print('Gelman-Rubin factor is {}'.format(R))
                 if np.all(np.abs(R - 1) < 0.15):
                     print('Early stopping criteria was validated at step {}. R values are: {}'.format(i, R))
                     break
@@ -148,7 +149,8 @@ class Model():
                 else:
                     params = params_list[-1].reshape(-1, self.nb_params)                    
                     Alpha_estimated = np.minimum((np.exp(log_alpha)), 1).mean()
-                    print(Alpha_estimated)
+                    if i%100==0:
+                        print('acceptance is {}'.format(np.mean(acc_ratios/i)))
                     Lambda = Lambda * np.exp(Gamma * (Alpha_estimated - AlphaStar))
                     Mu = Mu + Gamma * (params.mean(axis=0) - Mu)
                     Sigma = Sigma + Gamma * (np.dot((params - Mu).T, (params - Mu)) - Sigma)
