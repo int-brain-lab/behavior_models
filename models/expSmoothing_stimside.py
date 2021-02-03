@@ -78,4 +78,3 @@ class expSmoothing_stimside(model.Model):
             return np.array(torch.sum(logp_ch, axis=(0, -1))), values[:, :, :, 1]
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
-        

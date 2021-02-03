@@ -47,11 +47,11 @@ class Model():
         if torch.cuda.is_available():
             self.use_gpu = True
             self.device = torch.device("cuda:0")
-            print("Running on the GPU")
+            print("GPU is available")
         else:
             self.use_gpu = False
             self.device = torch.device("cpu")
-            print("Running on the CPU")
+            print("no GPU found")
 
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
@@ -85,10 +85,13 @@ class Model():
         else:            
             early_stop = False
             Nburn = int(nb_steps/2)
-            print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))        
+            print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))
         
         if len(initial_point.shape) == 1:
             initial_point = np.tile(initial_point[np.newaxis], (nb_chains, 1))
+
+        if adaptive:
+            print('with adaptive MCMC...')
 
         print('initial point for MCMC is {}'.format(initial_point))
 
@@ -131,29 +134,37 @@ class Model():
                     print('Early stopping criteria was validated at step {}. R values are: {}'.format(i, R))
                     break
 
-            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014                
+            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014
                 Gamma = (1/(i - Nburn + 1)**0.5)
                 if i==Nburn:
                     print('Adaptive MCMC starting...')
                     from scipy.stats import multivariate_normal
                     params = np.array(params_list)[-int(Nburn/2):].reshape(-1, self.nb_params)
                     Mu = params.mean(axis=0)
-                    Sigma = np.dot((params - Mu).T, (params - Mu))
-                    Lambda = 1 #(2.38**2)/self.nb_params
+                    Sigma = np.cov(params.T)
+                    Lambda = np.ones(len(params_list[-1])) #(2.38**2)/self.nb_params
                     AlphaStar = 0.234
-                    def adaptive_proposal(m, s, l):
+                    def adaptive_proposal(m, s, l, constrained=False):
                         list_proposals = []
-                        for k in range(len(m)):
-                            list_proposals.append(multivariate_normal.rvs(mean=m[k], cov=l * s))
+                        if not constrained:
+                            for k in range(len(l)):
+                                list_proposals.append(multivariate_normal.rvs(mean=m[k], cov=l[k] * s))
+                        else:
+                            for k in range(len(l)):
+                                while True:
+                                    candidate = multivariate_normal.rvs(mean=m, cov=s)
+                                    if np.all((candidate > self.lb_params) * (candidate < self.ub_params)):
+                                        break
+                                list_proposals.append(candidate)
                         return np.array(list_proposals)
                 else:
-                    params = params_list[-1].reshape(-1, self.nb_params)                    
-                    Alpha_estimated = np.minimum((np.exp(log_alpha)), 1).mean()
+                    param = params_list[-1].reshape(-1, self.nb_params)
+                    Alpha_estimated = np.minimum((np.exp(log_alpha)), 1)#.mean()
                     if i%100==0:
                         print('acceptance is {}'.format(np.mean(acc_ratios/i)))
                     Lambda = Lambda * np.exp(Gamma * (Alpha_estimated - AlphaStar))
-                    Mu = Mu + Gamma * (params.mean(axis=0) - Mu)
-                    Sigma = Sigma + Gamma * (np.dot((params - Mu).T, (params - Mu)) - Sigma)
+                    Mu = Mu + Gamma * (param.mean(axis=0) - Mu)
+                    Sigma = Sigma + Gamma * (np.cov(param.T) - Sigma)
 
         acc_ratios = acc_ratios/i
         if i==(nb_steps-1):
@@ -162,7 +173,7 @@ class Model():
         if self.use_gpu: # clean up gpu memory
             torch.cuda.empty_cache()
 
-        print('acceptance ratio is of {}. Careful, this ratio should be close to 0.15. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
+        print('acceptance ratio is of {}. Careful, this ratio should be close to 0.234. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
         return np.array(params_list), np.array(lkd_list), np.array(R_list)
 
     def inference_validated(self, parameters, method='Gelman-Rubin'):
@@ -178,6 +189,10 @@ class Model():
         V = (nb_samples - 1) / nb_samples * W + 1 / nb_samples * B
         R = V/W
         return R
+
+    def inference_successful(self, parameters, method='Gelman-Rubin'):
+        R = self.inference_validated(parameters, method)
+        return np.all(np.abs(R - 1) < 0.15)
 
     def evaluate(self, arr_params, sessions_id=None, return_details=False, clean_up_gpu_memory=True, **kwargs):
         '''
@@ -245,7 +260,8 @@ class Model():
             nb_chains = utils.look_up(kwargs, 'nb_chains', 4)
             nb_steps = utils.look_up(kwargs, 'nb_steps', None)
             initial_point = utils.look_up(kwargs, 'initial_point', None)
-            self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point)
+            adaptive = utils.look_up(kwargs, 'adaptive', True)
+            self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point, adaptive=adaptive)
             path = self.build_path(train_method, self.session_uuids[sessions_id])
             pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))
             print('results of inference SAVED')
