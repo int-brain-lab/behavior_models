@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.stats import truncnorm
-import os, pickle, utils
+import os, pickle, utils, itertools
 from tqdm import tqdm
 from scipy.special import logsumexp
 
@@ -8,7 +8,7 @@ class Model():
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, initial_point=None):
+    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02):
         '''
         Params:
             name (String): name of the model
@@ -43,10 +43,9 @@ class Model():
         if not os.path.exists(self.path_to_results + self.mouse_name):
             os.mkdir(self.path_to_results + self.mouse_name)
         self.std_RW = std_RW
-        self.initial_point = initial_point
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
-    def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point):
+    def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=False):
         '''
         Perform with inference MCMC
         Params:
@@ -62,22 +61,49 @@ class Model():
             if np.any(np.isinf(self.lb_params)) or np.any(np.isinf(self.ub_params)):
                 assert(False), 'because your bounds are infinite, an initial_point must be specified'
             initial_point = (self.lb_params + self.ub_params)/2.
+            import sobol_seq
+            grid = np.array(sobol_seq.i4_sobol_generate(self.nb_params, nb_chains))
+            initial_point = self.lb_params + grid * (self.ub_params - self.lb_params)
         
-        print('initial point for MCMC is {}'.format(initial_point))
-        #print('Std of RW is {}'.format(std_RW))
-        initial_point = np.tile(initial_point[np.newaxis], (nb_chains, 1))
+        if nb_steps is None:
+            nb_steps, early_stop = int(5000), int(1000), True
+            if self.nb_params <= 5:
+                Nburn, nb_minimum = 500, 1000
+            else:
+                Nburn, nb_minimum = 1000, 2000
+            print('Launching MCMC procedure with {} chains, {} max steps and {} std_RW. Early stopping is activated'.format(nb_chains, nb_steps, std_RW))
+        else:            
+            early_stop = False
+            Nburn = int(nb_steps/2)
+            print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))        
+        
+        if len(initial_point.shape) == 1:
+            initial_point = np.tile(initial_point[np.newaxis], (nb_chains, 1))
 
+        print('initial point for MCMC is {}'.format(initial_point))
+
+        adaptive_proposal=None
         lkd_list = [self.evaluate(initial_point, sessions_id)]
+        R_list = []
         params_list = [initial_point]
         acc_ratios = np.zeros([nb_chains])
-        for i in tqdm(range(nb_steps)):
-            a, b = (self.lb_params - params_list[-1]) / std_RW, (self.ub_params - params_list[-1]) / std_RW
-            proposal = truncnorm.rvs(a, b, params_list[-1], std_RW)
-            a_p, b_p = (self.lb_params - proposal) / std_RW, (self.ub_params - proposal) / std_RW
-            prop_liks = self.evaluate(proposal, sessions_id)
-            log_alpha = (prop_liks - lkd_list[-1] 
-                        + truncnorm.logpdf(params_list[-1], a_p, b_p, proposal, std_RW).sum(axis=1)
-                        - truncnorm.logpdf(proposal, a, b, params_list[-1], std_RW).sum(axis=1))
+        for i in tqdm(range(int(nb_steps))):
+            if adaptive_proposal is None:
+                a, b = (self.lb_params - params_list[-1]) / std_RW, (self.ub_params - params_list[-1]) / std_RW
+                proposal = truncnorm.rvs(a, b, params_list[-1], std_RW)
+                a_p, b_p = (self.lb_params - proposal) / std_RW, (self.ub_params - proposal) / std_RW
+                prop_liks = self.evaluate(proposal, sessions_id)
+                log_alpha = (prop_liks - lkd_list[-1] 
+                            + truncnorm.logpdf(params_list[-1], a_p, b_p, proposal, std_RW).sum(axis=1)
+                            - truncnorm.logpdf(proposal, a, b, params_list[-1], std_RW).sum(axis=1))
+            else:
+                proposal = adaptive_proposal(params_list[-1], Sigma, Lambda)
+                valid = np.all((proposal > self.lb_params) * (proposal < self.ub_params), axis=1)
+                proposal_modified = valid[:, np.newaxis] * proposal + (1 - valid[:, np.newaxis]) * initial_point
+                prop_liks = self.evaluate(proposal_modified, sessions_id)
+                log_alpha = (prop_liks - lkd_list[-1])
+                log_alpha[valid==False] = -np.inf
+
             accep = np.expand_dims(log_alpha > np.log(np.random.rand(len(log_alpha))), -1)
             new_params = proposal * accep + params_list[-1] * (1 - accep)
             new_lkds   = prop_liks * np.squeeze(accep) + lkd_list[-1] * (1 - np.squeeze(accep))
@@ -85,9 +111,53 @@ class Model():
             params_list.append(new_params)
             lkd_list.append(new_lkds)
             acc_ratios += np.squeeze(accep) * 1
-        acc_ratios = acc_ratios/nb_steps
+
+            if early_stop and (i > Nburn) and (i > nb_minimum):
+                R = self.inference_validated(np.array(params_list)[Nburn:])
+                R_list.append(R)
+                if np.all(np.all(np.abs(R - 1) < 0.15)):
+                    break
+                    print('Early stopping criteria was validated at step {}'.format(i))
+                break
+
+            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008
+                Gamma = (1/(i - Nburn + 1)**0.1)
+                if i==Nburn:
+                    from scipy.stats import multivariate_normal
+                    params = np.array(params_list)[-250:].reshape(-1, self.nb_params)
+                    Mu = params.mean(axis=0)
+                    Sigma = np.dot((params - Mu).T, (params - Mu))
+                    Lambda = 0.01 #(2.38**2)/self.nb_params
+                    AlphaStar = 0.234
+                    def adaptive_proposal(m, s, l):
+                        list_proposals = []
+                        for k in range(len(m)):
+                            list_proposals.append(multivariate_normal.rvs(mean=m[k], cov=l * s))
+                        return np.array(list_proposals)
+                else:
+                    params = params_list[-1].reshape(-1, self.nb_params)
+                    Alpha_estimated = np.minimum((np.exp(log_alpha)), 1).mean()
+                    Lambda = Lambda * np.exp(Gamma * (Alpha_estimated - AlphaStar))
+                    Mu = Mu + Gamma * (params.mean(axis=0) - Mu)
+                    Sigma = Sigma + Gamma * (np.dot((params - Mu).T, (params - Mu)) - Sigma)
+
+        acc_ratios = acc_ratios/i
         print('acceptance ratio is of {}. Careful, this ratio should be close to 0.15. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
-        return np.array(params_list), np.array(lkd_list)
+        return np.array(params_list), np.array(lkd_list), np.array(R_list)
+
+    def inference_validated(self, parameters, method='Gelman-Rubin'):
+        # implements Gelman-Rubin test, e.g., https://bookdown.org/rdpeng/advstatcomp/monitoring-convergence.html#monte-carlo-standard-errors
+        if method!='Gelman-Rubin':
+            return NotImplemented
+        nb_samples, nb_chains, _ = parameters.shape
+        chain_mean = parameters.mean(axis=0)
+        post_mean = chain_mean.mean(axis=0)        
+        B = nb_samples/(nb_chains - 1) * np.sum((chain_mean - post_mean)**2, axis=0)
+        chain_var = np.sum((parameters - (chain_mean[np.newaxis]))**2, axis=0)/(nb_samples - 1)
+        W = 1/(nb_chains) * np.sum(chain_var, axis=0)
+        V = (nb_samples - 1) / nb_samples * W + 1 / nb_samples * B
+        R = V/W
+        return R
 
     def evaluate(self, arr_params, sessions_id=None, return_details=False, **kwargs):
         '''
@@ -148,12 +218,11 @@ class Model():
         if train_method=='MCMC':
             std_RW = utils.look_up(kwargs, 'std_RW', self.std_RW)
             nb_chains = utils.look_up(kwargs, 'nb_chains', 4)
-            nb_steps = utils.look_up(kwargs, 'nb_steps', 1000)
-            initial_point = utils.look_up(kwargs, 'initial_point', self.initial_point)
-            print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))
-            self.params_list, self.lkd_list = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point)
+            nb_steps = utils.look_up(kwargs, 'nb_steps', None)
+            initial_point = utils.look_up(kwargs, 'initial_point', None)            
+            self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point)
             path = self.build_path(train_method, self.session_uuids[sessions_id])
-            pickle.dump([self.params_list, self.lkd_list], open(path, 'wb'))
+            pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))
             print('results of inference SAVED')
         else:
             return NotImplemented
@@ -170,7 +239,11 @@ class Model():
         '''
         if train_method=='MCMC':
             path = self.build_path(train_method, self.session_uuids[sessions_id])
-            [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb'))
+            try:
+                [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
+            except:
+                [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb'))
+                pass
         else:
             return NotImplemented
 
