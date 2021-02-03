@@ -70,7 +70,6 @@ class biased_Bayesian(model.Model):
         Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
         gamma_unsqueezed = torch.unsqueeze(gamma, 1)
 
-
         for i_trial in range(self.nb_trials):
             s = torch.unsqueeze(side[:, i_trial], 0)
             lks = torch.stack([gamma_unsqueezed*(s==-1) + (1-gamma_unsqueezed) * (s==1), ones * 1./2, gamma_unsqueezed*(s==1) + (1-gamma_unsqueezed)*(s==-1)]).T

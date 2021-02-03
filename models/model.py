@@ -3,7 +3,7 @@ from scipy.stats import truncnorm
 import os, pickle, utils, itertools
 from tqdm import tqdm
 from scipy.special import logsumexp
-import warnings
+import warnings, torch
 
 class Model():
     '''
@@ -130,8 +130,8 @@ class Model():
                     print('Early stopping criteria was validated at step {}'.format(i))
                 break
 
-            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008
-                Gamma = (1/(i - Nburn + 1)**0.1)
+            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014
+                Gamma = (1/(i - Nburn + 1)**0.5)
                 if i==Nburn:
                     from scipy.stats import multivariate_normal
                     params = np.array(params_list)[-250:].reshape(-1, self.nb_params)
