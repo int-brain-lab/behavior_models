@@ -134,10 +134,10 @@ class Model():
                 Gamma = (1/(i - Nburn + 1)**0.5)
                 if i==Nburn:
                     from scipy.stats import multivariate_normal
-                    params = np.array(params_list)[-250:].reshape(-1, self.nb_params)
+                    params = np.array(params_list)[-int(Nburn/2):].reshape(-1, self.nb_params)
                     Mu = params.mean(axis=0)
                     Sigma = np.dot((params - Mu).T, (params - Mu))
-                    Lambda = 0.01 #(2.38**2)/self.nb_params
+                    Lambda = 1 #(2.38**2)/self.nb_params
                     AlphaStar = 0.234
                     def adaptive_proposal(m, s, l):
                         list_proposals = []
