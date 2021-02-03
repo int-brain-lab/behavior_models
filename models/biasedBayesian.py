@@ -64,21 +64,18 @@ class biased_Bayesian(model.Model):
         l = torch.stack([torch.tensor(torch.cat((torch.unsqueeze(hazard[i], -1), torch.cat(
                         (torch.diag(1 - hazard[i, :-1]), padding), axis=0)), axis=-1), dtype=torch.float32) for i in range(len(hazard))]) # l_{t-1}, l_t
 
-        transition = torch.stack([1e-12 + torch.transpose(l[k][:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1) for k in range(len(l))])
-        ones = torch.ones((nb_chains, nb_sessions) , device=self.device, dtype=torch.float32)
+        transition = torch.stack([1e-12 + torch.transpose(l[k][:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1) for k in range(len(l))])        
         # likelihood
         Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
-        gamma_unsqueezed = torch.unsqueeze(gamma, 1)
+        ones = torch.ones((nb_chains, nb_sessions, self.nb_trials) , device=self.device, dtype=torch.float32)
+        gamma_unsqueezed, side_unsqueezed = torch.unsqueeze(torch.unsqueeze(gamma, 1), -1), torch.unsqueeze(side, 0)        
+        lks = torch.stack([gamma_unsqueezed*(side_unsqueezed==-1) + (1-gamma_unsqueezed) * (side_unsqueezed==1), ones * 1./2, gamma_unsqueezed*(side_unsqueezed==1) + (1-gamma_unsqueezed)*(side_unsqueezed==-1)]).T
+        to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
 
         for i_trial in range(self.nb_trials):
-            s = torch.unsqueeze(side[:, i_trial], 0)
-            lks = torch.stack([gamma_unsqueezed*(s==-1) + (1-gamma_unsqueezed) * (s==1), ones * 1./2, gamma_unsqueezed*(s==1) + (1-gamma_unsqueezed)*(s==-1)]).T
-
-            # save priors
             if i_trial > 0:
-                alpha[act[:, i_trial-1]!=0, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2)[act[:, i_trial-1]!=0] #torch.logsumexp(h[:, :, :, np.newaxis] + self.t, axis=(2))
-                alpha[act[:, i_trial-1]==0, :, i_trial] = alpha[act[:, i_trial-1]==0, :, (i_trial-1)]
-            h = alpha[:, :, i_trial] * lks.repeat(1, 1, self.nb_blocklengths)
+                alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
+            h = alpha[:, :, i_trial] * lks[i_trial].repeat(1, 1, self.nb_blocklengths)
             h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
 
         predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
@@ -98,8 +95,8 @@ class biased_Bayesian(model.Model):
 
         p_ch     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
 
-        p_ch_cpu = torch.tensor(p_ch.detach(), device='cpu')
         priors   = 1 - torch.tensor(Pis.detach(), device='cpu')
+        p_ch_cpu = torch.tensor(p_ch.detach(), device='cpu')    
         logp_ch = torch.log(torch.minimum(torch.maximum(p_ch_cpu, torch.tensor(1e-8)), torch.tensor(1 - 1e-8)))
 
         # clean up gpu memory

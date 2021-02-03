@@ -55,7 +55,7 @@ class Model():
 
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
-    def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=False):
+    def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):
         '''
         Perform with inference MCMC
         Params:
@@ -125,14 +125,15 @@ class Model():
             if early_stop and (i > Nburn) and (i > nb_minimum):
                 R = self.inference_validated(np.array(params_list)[Nburn:])
                 R_list.append(R)
-                if np.all(np.all(np.abs(R - 1) < 0.15)):
+                print(R)
+                if np.all(np.abs(R - 1) < 0.15):
+                    print('Early stopping criteria was validated at step {}. R values are: {}'.format(i, R))
                     break
-                    print('Early stopping criteria was validated at step {}'.format(i))
-                break
 
-            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014
+            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014                
                 Gamma = (1/(i - Nburn + 1)**0.5)
                 if i==Nburn:
+                    print('Adaptive MCMC starting...')
                     from scipy.stats import multivariate_normal
                     params = np.array(params_list)[-int(Nburn/2):].reshape(-1, self.nb_params)
                     Mu = params.mean(axis=0)
@@ -145,15 +146,16 @@ class Model():
                             list_proposals.append(multivariate_normal.rvs(mean=m[k], cov=l * s))
                         return np.array(list_proposals)
                 else:
-                    params = params_list[-1].reshape(-1, self.nb_params)
+                    params = params_list[-1].reshape(-1, self.nb_params)                    
                     Alpha_estimated = np.minimum((np.exp(log_alpha)), 1).mean()
+                    print(Alpha_estimated)
                     Lambda = Lambda * np.exp(Gamma * (Alpha_estimated - AlphaStar))
                     Mu = Mu + Gamma * (params.mean(axis=0) - Mu)
                     Sigma = Sigma + Gamma * (np.dot((params - Mu).T, (params - Mu)) - Sigma)
 
         acc_ratios = acc_ratios/i
         if i==(nb_steps-1):
-            assert(False), 'inference has failed'
+            print('Warning : inference has not converged according to Gelman-Rubin')
 
         if self.use_gpu: # clean up gpu memory
             torch.cuda.empty_cache()

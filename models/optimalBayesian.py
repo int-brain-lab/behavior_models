@@ -62,21 +62,19 @@ class optimal_Bayesian(model.Model):
         padding = torch.zeros(self.nb_blocklengths-1, device=self.device, dtype=torch.float32)
         l = torch.cat((torch.unsqueeze(hazard, -1), torch.cat(
                     (torch.diag(1 - hazard[:-1]), padding[np.newaxis]), axis=0)), axis=-1) # l_{t-1}, l_t
-        transition = 1e-12 + torch.transpose(l[:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1)
-        ones = torch.ones(nb_sessions, device=self.device, dtype=torch.float32)
+        transition = 1e-12 + torch.transpose(l[:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1)        
 
         # likelihood
         Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
+        ones = torch.ones((nb_sessions, self.nb_trials), device=self.device, dtype=torch.float32)
+        lks = torch.stack([gamma*(side==-1) + (1-gamma) * (side==1), ones * 1./2, gamma*(side==1) + (1-gamma)*(side==-1)]).T
+        to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
 
         for i_trial in range(self.nb_trials):
-            s = side[:, i_trial]
-            lks = torch.stack([gamma*(s==-1) + (1-gamma) * (s==1), ones * 1./2, gamma*(s==1) + (1-gamma)*(s==-1)]).T
-
             # save priors
             if i_trial > 0:
-                alpha[act[:, i_trial-1]!=0, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2)[act[:, i_trial-1]!=0]
-                alpha[act[:, i_trial-1]==0, :, i_trial] = alpha[act[:, i_trial-1]==0, :, (i_trial-1)]
-            h = alpha[:, :, i_trial] * torch.unsqueeze(lks, 1).repeat(1, 1, self.nb_blocklengths)
+                alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
+            h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(1, 1, self.nb_blocklengths)
             h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
 
         predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
