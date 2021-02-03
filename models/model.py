@@ -44,6 +44,15 @@ class Model():
         if not os.path.exists(self.path_to_results + self.mouse_name):
             os.mkdir(self.path_to_results + self.mouse_name)
         self.std_RW = std_RW
+        if torch.cuda.is_available():
+            self.use_gpu = True
+            self.device = torch.device("cuda:0")
+            print("Running on the GPU")
+        else:
+            self.use_gpu = False
+            self.device = torch.device("cpu")
+            print("Running on the CPU")
+
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=False):
@@ -146,6 +155,9 @@ class Model():
         if i==(nb_steps-1):
             assert(False), 'inference has failed'
 
+        if self.use_gpu:
+            torch.cuda.empty_cache()
+
         print('acceptance ratio is of {}. Careful, this ratio should be close to 0.15. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
         return np.array(params_list), np.array(lkd_list), np.array(R_list)
 
@@ -225,7 +237,7 @@ class Model():
             std_RW = utils.look_up(kwargs, 'std_RW', self.std_RW)
             nb_chains = utils.look_up(kwargs, 'nb_chains', 4)
             nb_steps = utils.look_up(kwargs, 'nb_steps', None)
-            initial_point = utils.look_up(kwargs, 'initial_point', None)            
+            initial_point = utils.look_up(kwargs, 'initial_point', None)
             self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point)
             path = self.build_path(train_method, self.session_uuids[sessions_id])
             pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))

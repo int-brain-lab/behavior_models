@@ -21,14 +21,6 @@ class optimal_Bayesian(model.Model):
             std_RW = np.array([0.02, 0.02, 0.01, 0.01, 0.01])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
         self.nb_blocklengths, self.nb_typeblocks = 100, 3
-        if torch.cuda.is_available():
-            self.use_gpu = True
-            self.device = torch.device("cuda:0")
-            print("Running on the GPU")
-        else:
-            self.use_gpu = False
-            self.device = torch.device("cpu")
-            print("Running on the CPU")
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         '''
@@ -109,13 +101,13 @@ class optimal_Bayesian(model.Model):
         logp_ch = torch.log(torch.minimum(torch.maximum(p_ch_cpu, torch.tensor(1e-8)), torch.tensor(1 - 1e-8)))
 
         # clean up gpu memory
-        if self.use_gpu:
-            del gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg, lb, tau, ub, act, stim, side, s, lks
-            del alpha, h, zetas, lapses, b, n, ref, hazard, padding, l, transition, ones, Rhos
-            del predictive, Pis, pRight, pLeft, pActions, p_ch, unsqueezed_lapses
-            if self.repetition_bias:
-                del rep_bias, unsqueezed_rep_bias
-            torch.cuda.empty_cache()
+        # if self.use_gpu:
+        #     del gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg, lb, tau, ub, act, stim, side, s, lks
+        #     del alpha, h, zetas, lapses, b, n, ref, hazard, padding, l, transition, ones, Rhos
+        #     del predictive, Pis, pRight, pLeft, pActions, p_ch, unsqueezed_lapses
+        #     if self.repetition_bias:
+        #         del rep_bias, unsqueezed_rep_bias
+        #     torch.cuda.empty_cache()
 
         if return_details:
             return np.array(torch.sum(logp_ch, axis=(0, -1))), priors
