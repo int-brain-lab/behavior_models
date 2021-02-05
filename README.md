@@ -4,7 +4,9 @@ This is the readme for the behavioral models. We developped a series of models, 
 - the exponential smoothing model based on the previous actions
 - the exponential smoothing model based on the previous stimulus sides
 - the optimal Bayesian model. This model performs inference in the generative Bayesian process with the correct parameters (mean block size=50, lower bound=20, upper bound=100, p(stimulus on left side | left block) = 0.8)
-- the biased Approximate Bayesian model. This model performs inference in the generative Bayesian process with parameters fitted to the behavior. The process is reformulated to make inference stable. A `volatility = p(change)` is fitted to the behavio
+- the biased Bayesian model. This model performs inference in the generative Bayesian process with parameters fitted to the behavior (unstable)
+- the biased Approximate Bayesian model. The model assumes a probability of change: at every trial, the probability that the block has changed is constant and fitted.
+- the smoothing model which fits a kernel based on the previous simulus sides (unstable)
 
 See the `main.py` file for an example on prior generation
 
