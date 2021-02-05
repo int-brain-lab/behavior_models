@@ -439,7 +439,7 @@ class Model():
 
         if parameter_type=='posterior_mean':
             nb_steps = len(self.params_list)
-            parameters_chosen = self.params_list[-500:].mean(axis=(0,1)) # int(nb_steps/2)
+            parameters_chosen = self.params_list[-int(nb_steps/2):].mean(axis=(0,1)) # int(nb_steps/2)
             return parameters_chosen
         elif parameter_type=='maximum_a_posteriori':
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))
