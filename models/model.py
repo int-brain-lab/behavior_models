@@ -183,7 +183,7 @@ class Model():
             torch.cuda.empty_cache()
 
         print('acceptance ratio is of {}. Careful, this ratio should be close to 0.234. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
-        return np.array(params_list), np.array(lkd_list), np.array(R_list)
+        return np.array(params_list), np.array(lkd_list), np.array(self.R_list)
 
     def inference_validated(self, parameters, method='Gelman-Rubin'):
         # implements Gelman-Rubin test, e.g., https://bookdown.org/rdpeng/advstatcomp/monitoring-convergence.html#monte-carlo-standard-errors
