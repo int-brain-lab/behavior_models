@@ -27,17 +27,17 @@ from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
 from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
 from models.optimalBayesian import optimal_Bayesian as optBay
 from models.biasedApproxBayesian import biased_ApproxBayesian as baisedApproxBay
-from models.stimside import stimside
-from models.prevAction import prevAction
 
 '''
-If you are interested in 
+If you are interested in fitting (and the prior) of the mice behavior
 '''
 model = exp_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
 model.load_or_train()
 param = model.get_parameters() # if you want the parameters
 priors, llk, accuracy = model.compute_prior() # compute prior
 
-# if you are interested in pseudo-sessions. NB the model has to previously be trained
+'''
+if you are interested in pseudo-sessions. NB the model has to previously be trained
+'''
 model = exp_stimside('./results/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
 priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)
