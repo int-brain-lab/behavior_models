@@ -7,6 +7,15 @@ from itertools import accumulate
 import sobol_seq
 from scipy.stats import truncnorm, norm
 
+def format_input(stimuli_arr, actions_arr, stim_sides_arr):
+    # get maximum number of trials across sessions
+    max_len = np.array([len(stimuli_arr[k]) for k in range(len(stimuli_arr))]).max()
+    # pad with 0 such that we obtain nd arrays of size nb_sessions x nb_trials and convert to arrays
+    stimuli    = np.array([np.concatenate((stimuli_arr[k], np.zeros(max_len-len(stimuli_arr[k])))) for k in range(len(stimuli_arr))])
+    actions     = np.array([np.concatenate((actions_arr[k], np.zeros(max_len-len(actions_arr[k])))) for k in range(len(actions_arr))])
+    stim_side    = np.array([np.concatenate((stim_sides_arr[k], np.zeros(max_len-len(stim_sides_arr[k])))) for k in range(len(stim_sides_arr))])
+    return stimuli, actions, stim_side
+
 def look_up(dic, key, val):
     if key in dic.keys(): 
         return dic[key]
