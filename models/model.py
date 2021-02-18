@@ -51,7 +51,7 @@ class Model():
         if (self.actions is not None) and (len(self.actions.shape)==1):
             self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
-            print('Launching in pseudo-session model. In this mode, you only have access to the compute_prior method')
+            print('Launching in pseudo-session mode. In this mode, you only have access to the compute_prior method')
 
         if torch.cuda.is_available():
             self.use_gpu = True
