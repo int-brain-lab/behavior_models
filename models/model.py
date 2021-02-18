@@ -9,7 +9,7 @@ class Model():
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02):
+    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, train_method='MCMC'):
         '''
         Params:
             name (String): name of the model
@@ -21,22 +21,24 @@ class Model():
             stimuli (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have 
                 different number of trials, pad the last trials with 0.
             stim_side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1). 
-                If the sessions have different number of trials, pad the last trials with 0.            
+                If the sessions have different number of trials, pad the last trials with 0.
             nb_params (int): nb of parameters of the model (these parameters will be inferred)
             lb_params (array of floats): lower bounds of parameters (e.g., if `nb_params=3`, np.array([0, 0, -np.inf]))
             ub_params (array of floats): upperboud bounds of parameters (e.g., if `nb_params=3`, np.array([1, 1, np.inf]))
+            train_method (string): inference method (only MCMC is possible for the moment, and forever?)
         '''
         self.name = name
+        if train_method!='MCMC':
+            raise NotImplementedError
+        self.train_method = train_method        
         print('')
         print('Initializing {} model'.format(name))
-        self.path_to_results = path_to_results        
-        self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
-        if len(self.actions.shape)==1:
-            self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]        
-        self.lb_params, self.ub_params, self.nb_params = lb_params, ub_params, nb_params
-        self.nb_trials = self.actions.shape[-1]
+
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
         assert(len(np.unique(self.session_uuids)) == len(self.session_uuids)), 'there is a problem in the session formatting. Contact Charles Findling'
+
+        self.path_to_results = path_to_results
+        self.lb_params, self.ub_params, self.nb_params = lb_params, ub_params, nb_params
         self.mouse_name = mouse_name
         if not os.path.exists(self.path_to_results):
             os.mkdir(self.path_to_results)
@@ -44,6 +46,13 @@ class Model():
         if not os.path.exists(self.path_to_results + self.mouse_name):
             os.mkdir(self.path_to_results + self.mouse_name)
         self.std_RW = std_RW
+
+        self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
+        if (self.actions is not None) and (len(self.actions.shape)==1):
+            self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
+        else:
+            print('Launching in pseudo-session model. In this mode, you only have access to the compute_prior method')
+
         if torch.cuda.is_available():
             self.use_gpu = True
             self.device = torch.device("cuda:0")
@@ -52,7 +61,6 @@ class Model():
             self.use_gpu = False
             self.device = torch.device("cpu")
             print("no GPU found")
-
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):
@@ -97,7 +105,7 @@ class Model():
 
         adaptive_proposal=None
         lkd_list = [self.evaluate(initial_point, sessions_id, clean_up_gpu_memory=False)]
-        R_list = []
+        self.R_list = []
         params_list = [initial_point]
         acc_ratios = np.zeros([nb_chains])
         for i in tqdm(range(int(nb_steps))):
@@ -127,7 +135,7 @@ class Model():
 
             if early_stop and (i > Nburn) and (i > nb_minimum):
                 R = self.inference_validated(np.array(params_list)[Nburn:])
-                R_list.append(R)
+                self.R_list.append(R)
                 if i%100==0:
                     print('Gelman-Rubin factor is {}'.format(R))
                 if np.all(np.abs(R - 1) < 0.15):
@@ -168,7 +176,7 @@ class Model():
 
         print('final posterior_mean is {}'.format(np.array(params_list)[Nburn:].mean(axis=(0,1))))
         acc_ratios = acc_ratios/i
-        if i==(nb_steps-1):
+        if i==(nb_steps-1) and early_stop:
             print('Warning : inference has not converged according to Gelman-Rubin')
 
         if self.use_gpu: # clean up gpu memory
@@ -208,9 +216,21 @@ class Model():
         '''
         if sessions_id is None and 'act' not in kwargs.keys():
             assert(False), 'session ids must be specified or explicit action/stimuli/stim_side must be passed in kwargs'
-        act = utils.look_up(kwargs, 'act', self.actions[sessions_id])
-        stim = utils.look_up(kwargs, 'stim', self.stimuli[sessions_id])
-        side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])
+        
+        if (self.actions is None) and ('act' not in kwargs.keys()): raise ValueError('No action specified')
+        if (self.stimuli is None) and ('stim' not in kwargs.keys()): raise ValueError('No stimuli specified')
+        if (self.stim_side is None) and ('side' not in kwargs.keys()): raise ValueError('No stim side specified')
+
+        if (self.stim_side is not None) and (self.stim_side is not None) and (self.stim_side is not None):
+            act = utils.look_up(kwargs, 'act', self.actions[sessions_id])
+            stim = utils.look_up(kwargs, 'stim', self.stimuli[sessions_id])
+            side = utils.look_up(kwargs, 'side', self.stim_side[sessions_id])
+        else:
+            if ('act' not in kwargs.keys()) or ('stim' not in kwargs.keys()) or ('side' not in kwargs.keys()):
+                raise ValueError('Problem in input specification')
+            else:
+                act, stim, side = kwargs['act'], kwargs['stim'], kwargs['side']
+
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             res = self.compute_lkd(arr_params, act, stim, side, return_details)
@@ -224,63 +244,60 @@ class Model():
         '''
         return NotImplemented
 
-    def load_or_train(self, sessions_id=None, train_method='MCMC', remove_old=False, **kwargs):
+    def load_or_train(self, sessions_id=None, remove_old=False, **kwargs):
         '''
         Loads the model if the model has been previously trained, otherwise trains the model
         Params:
             sessions_id (array of int): gives the sessions to be used for the training/loading (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
-            train_method (string): gives the training method when the model is to be trained. today only MCMC is implemented
             remove_old (boolean): removes old saved files
         '''
         if sessions_id is None:
-            sessions_id = np.arange(len(self.actions))
+            sessions_id = np.arange(len(self.session_uuids))
+            assert(len(self.session_uuids)==len(self.actions))
         if remove_old:
-            self.remove(sessions_id, train_method)
-        if train_method!='MCMC':
-            raise NotImplementedError
-        path = self.build_path(train_method, self.session_uuids[sessions_id])
+            self.remove(sessions_id, self.train_method)
+
+        path = self.build_path(self.session_uuids[sessions_id])
         if os.path.exists(path):
-            self.load(sessions_id, train_method)
+            self.load(sessions_id)
             print('results found and loaded')
         else:
-            self.train(sessions_id, train_method, **kwargs)
+            self.train(sessions_id, **kwargs)
 
-    def train(self, sessions_id, train_method, **kwargs):
+    def train(self, sessions_id, **kwargs):
         '''
         Training method
         Params:
             sessions_id (array of int): gives the sessions to be used for the training (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
-            train_method (string): the training method. today only MCMC is implemented 
         Output:
             a saved pickle file with the posterior distribution       
         '''
-        if train_method=='MCMC':
+        if self.train_method=='MCMC':
             std_RW = utils.look_up(kwargs, 'std_RW', self.std_RW)
             nb_chains = utils.look_up(kwargs, 'nb_chains', 4)
             nb_steps = utils.look_up(kwargs, 'nb_steps', None)
             initial_point = utils.look_up(kwargs, 'initial_point', None)
             adaptive = utils.look_up(kwargs, 'adaptive', True)
             self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point, adaptive=adaptive)
-            path = self.build_path(train_method, self.session_uuids[sessions_id])
+            path = self.build_path(self.session_uuids[sessions_id])
             pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))
             print('results of inference SAVED')
         else:
             return NotImplemented
 
-    def load(self, sessions_id, train_method):
+    def load(self, sessions_id):
         '''
         Load method. This method should not be called directly. Call the load_or_train() method instead
         Params:
             sessions_id (array of int): gives the sessions to be used for the loading (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
-            train_method (string): the training method. today only MCMC is implemented 
         Ouput:
             Loads an existing file.         
         '''
-        if train_method=='MCMC':
-            path = self.build_path(train_method, self.session_uuids[sessions_id])
+        if self.train_method=='MCMC':
+            path = self.build_path(self.session_uuids[sessions_id])
             try:
                 [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
             except:
@@ -289,17 +306,16 @@ class Model():
         else:
             return NotImplemented
 
-    def remove(self, sessions_id, train_method):
+    def remove(self, sessions_id):
         '''
         Remove method. This method removes the past saved results.
         Params:
             sessions_id (array of int): gives the sessions used for the training (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
-            train_method (string): the training method. today only MCMC is implemented 
         Ouput:
-            Removes the previously found results        
+            Removes the previously found results
         '''
-        path = self.build_path(train_method, self.session_uuids[sessions_id])
+        path = self.build_path(self.session_uuids[sessions_id])
         if os.path.exists(path):
             os.remove(path)
             print('results deleted')
@@ -307,7 +323,7 @@ class Model():
             print('no results were saved')
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side
-    def compute_prior(self, act, stim, side, sessions_id=None, parameter_type='whole_posterior', train_method='MCMC'):
+    def compute_prior(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
         '''
         Compute_prior method.
         Params:
@@ -320,22 +336,32 @@ class Model():
             sessions_id (array of int): gives the sessions used for the traning (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean' and 'maximum_a_posteriori' are available
-            train_method (string): the training method. today only MCMC is implemented 
         Ouput:
             Computes the prior and accuracy for given act/stim/side   
-        '''        
-        if not hasattr(self, 'params_list'):
-            if sessions_id is None:
-                sessions_id = np.arange(len(self.actions))
-            path = self.build_path(train_method, self.session_uuids[sessions_id])
-            if os.path.exists(path):
-                self.load(sessions_id, train_method)
-            else:
-                print('call the load_or_train() function')
+        '''
+        if (act is None) and (self.actions is None):
+            print('no actions is specified')
+        if (stim is None) and (self.stimuli is None):
+            print('no stimuli is specified')
+        if (side is None) and (self.stim_side is None):
+            print('no stim_side is specified')
 
-        if train_method=='MCMC': 
+        if act is None: act = self.actions
+        if stim is None: stim = self.stimuli
+        if side is None: side = self.stim_side
+
+        if (not hasattr(self, 'params_list')):
+            if sessions_id is None:
+                sessions_id = np.arange(len(self.session_uuids))
+            path = self.build_path(self.session_uuids[sessions_id])
+            if os.path.exists(path):
+                self.load(sessions_id)
+            else:
+                print('the model has not be trained')
+
+        if self.train_method=='MCMC': 
             assert(parameter_type in ['MAP', 'posterior_mean', 'whole_posterior']), 'parameter_type must be MAP, posterior_mean or whole_posterior'
-        if train_method!='MCMC':
+        if self.train_method!='MCMC':
             return NotImplemented
 
         if parameter_type=='posterior_mean':
@@ -356,7 +382,7 @@ class Model():
         accuracy = np.exp(llk/np.sum(act!=0))
         return np.squeeze(np.mean(np.array(priors), axis=1)), llk, accuracy
 
-    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', train_method='MCMC', remove_old=False, param=None):
+    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', remove_old=False, param=None):
         '''
         Scores the model on session_id. NB: to implement cross validation, do not train and test on the same sessions
         Params:
@@ -364,11 +390,10 @@ class Model():
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             sessions_id_test (array of int): gives the sessions on which we want to test             
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean' and 'maximum_a_posteriori' are available
-            train_method (string): the training method. today only MCMC is implemented
         Outputs:
             accuracy and loglkd on new sessions
         '''
-        path = self.build_path(train_method, self.session_uuids[sessions_id], self.session_uuids[sessions_id_test])
+        path = self.build_path(self.session_uuids[sessions_id], self.session_uuids[sessions_id_test])
         if (remove_old or param is not None) and os.path.exists(path):
             os.remove(path)
         elif os.path.exists(path):
@@ -377,7 +402,7 @@ class Model():
             print('accuracy on test sessions: {}'.format(accuracy))
             return loglkd, accuracy
 
-        self.load(sessions_id, train_method)
+        self.load(sessions_id)
         act, stim, side = self.actions[sessions_id_test], self.stimuli[sessions_id_test], self.stim_side[sessions_id_test]
 
         if param is not None:
@@ -387,17 +412,16 @@ class Model():
             print('accuracy on test sessions: {}'.format(accuracy))
             return loglkd, accuracy
         else:
-            prior, loglkd, accuracy = self.compute_prior(act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, train_method=train_method)
+            prior, loglkd, accuracy = self.compute_prior(act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type)
             pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
             print('accuracy on test sessions: {}'.format(accuracy))
         return loglkd, accuracy
 
-    def build_path(self, train_method, l_sessionuuids_train, l_sessionuuids_test=None):
+    def build_path(self, l_sessionuuids_train, l_sessionuuids_test=None):
         '''
         Generates the path where the results will be saved
         Params:
             l_sessionuuids_train (array of int)
-            train_method (string): the training method. today only MCMC is implemented 
             l_sessionuuids_test (array of int)
         Ouput:
             formatted path where the results are saved
@@ -405,36 +429,35 @@ class Model():
         str_sessionuuids = ''
         for k in range(len(l_sessionuuids_train)): str_sessionuuids += '_sess{}_{}'.format(k+1, l_sessionuuids_train[k])
         if l_sessionuuids_test is None:
-            path = self.path_results_mouse + 'train_{}_train{}.pkl'.format(train_method, str_sessionuuids)
+            path = self.path_results_mouse + 'train_{}_train{}.pkl'.format(self.train_method, str_sessionuuids)
             return path
         else:
             str_sessionuuids_test = ''
             for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_sess{}_{}'.format(k+1, l_sessionuuids_test[k])
-            path = self.path_results_mouse + 'train_{}_train{}_test{}.pkl'.format(train_method, str_sessionuuids, str_sessionuuids_test)
+            path = self.path_results_mouse + 'train_{}_train{}_test{}.pkl'.format(self.train_method, str_sessionuuids, str_sessionuuids_test)
             return path
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side
-    def get_parameters(self, sessions_id=None, parameter_type='all', train_method='MCMC'):
+    def get_parameters(self, sessions_id=None, parameter_type='all'):
         '''
         get parameters method.
         Params:
             sessions_id (array of int): gives the sessions on which the training took place (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean', 'maximum_a_posteriori' and 'all' are available
-            train_method (string): the training method. today only MCMC is implemented      
         '''        
         if not hasattr(self, 'params_list'):
             if sessions_id is None:
                 sessions_id = np.arange(len(self.actions))
-            path = self.build_path(train_method, self.session_uuids[sessions_id])
+            path = self.build_path(self.session_uuids[sessions_id])
             if os.path.exists(path):
-                self.load(sessions_id, train_method)
+                self.load(sessions_id)
             else:
                 print('call the load_or_train() function')
 
-        if train_method=='MCMC': 
+        if self.train_method=='MCMC': 
             assert(parameter_type in ['maximum_a_posteriori', 'posterior_mean', 'all']), 'parameter_type must be maximum_a_posteriori, posterior_mean or all'
-        if train_method!='MCMC':
+        if self.train_method!='MCMC':
             return NotImplemented
 
         if parameter_type=='posterior_mean':

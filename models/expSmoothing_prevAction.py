@@ -35,13 +35,13 @@ class expSmoothing_prevAction(model.Model):
         act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
 
-        values = torch.zeros([nb_sessions, nb_chains, self.nb_trials, 2], dtype=torch.float64) + 0.5
+        values = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64) + 0.5
 
         alpha = unsqueeze(alpha)
         zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
         lapses = unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0)
 
-        for t in range(self.nb_trials):
+        for t in range(act.shape[-1]):
             s = side[:, t]
             if t > 0:
                 s_prev = torch.stack([act[:, t - 1]==-1, act[:, t - 1]==1]) * 1

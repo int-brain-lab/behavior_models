@@ -44,7 +44,7 @@ class optimal_Bayesian(model.Model):
         nb_sessions = len(act)
         lb, tau, ub, gamma = 20, 60, 100, 0.8
 
-        alpha = torch.zeros([nb_sessions, nb_chains, self.nb_trials, self.nb_blocklengths, self.nb_typeblocks], device=self.device, dtype=torch.float32)
+        alpha = torch.zeros([nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks], device=self.device, dtype=torch.float32)
         alpha[:, :, 0, 0, 1] = 1
         alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
         h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks * self.nb_blocklengths], device=self.device, dtype=torch.float32)
@@ -66,11 +66,11 @@ class optimal_Bayesian(model.Model):
 
         # likelihood
         Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
-        ones = torch.ones((nb_sessions, self.nb_trials), device=self.device, dtype=torch.float32)
+        ones = torch.ones((nb_sessions, act.shape[-1]), device=self.device, dtype=torch.float32)
         lks = torch.stack([gamma*(side==-1) + (1-gamma) * (side==1), ones * 1./2, gamma*(side==1) + (1-gamma)*(side==-1)]).T
         to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
 
-        for i_trial in range(self.nb_trials):
+        for i_trial in range(act.shape[-1]):
             # save priors
             if i_trial > 0:
                 alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])

@@ -43,7 +43,7 @@ class biased_ApproxBayesian(model.Model):
         act, stim, side = torch.tensor(act, device=self.device, dtype=torch.float32), torch.tensor(stim, device=self.device, dtype=torch.float32), torch.tensor(side, device=self.device, dtype=torch.float32)
         nb_sessions = len(act)
 
-        predictive = torch.zeros([nb_sessions, nb_chains, self.nb_trials, self.nb_typeblocks], device=self.device, dtype=torch.float32)
+        predictive = torch.zeros([nb_sessions, nb_chains, act.shape[-1], self.nb_typeblocks], device=self.device, dtype=torch.float32)
         predictive[:, :, 0, 1] = 1
         h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks], device=self.device, dtype=torch.float32)
 
@@ -59,12 +59,12 @@ class biased_ApproxBayesian(model.Model):
 
         # likelihood
         Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
-        ones = torch.ones((nb_chains, nb_sessions, self.nb_trials) , device=self.device, dtype=torch.float32)
+        ones = torch.ones((nb_chains, nb_sessions, act.shape[-1]) , device=self.device, dtype=torch.float32)
         gamma_unsqueezed, side_unsqueezed = torch.unsqueeze(torch.unsqueeze(gamma, 1), -1), torch.unsqueeze(side, 0)        
         lks = torch.stack([gamma_unsqueezed*(side_unsqueezed==-1) + (1-gamma_unsqueezed) * (side_unsqueezed==1), ones * 1./2, gamma_unsqueezed*(side_unsqueezed==1) + (1-gamma_unsqueezed)*(side_unsqueezed==-1)]).T
         to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
 
-        for i_trial in range(self.nb_trials):
+        for i_trial in range(act.shape[-1]):
             if i_trial > 0:
                 predictive[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + predictive[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
             h = predictive[:, :, i_trial] * lks[i_trial]
