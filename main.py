@@ -38,6 +38,7 @@ priors, llk, accuracy = model.compute_prior() # compute prior
 
 '''
 if you are interested in pseudo-sessions. NB the model has to previously be trained
+It will return an Error if the model has not been trained
 '''
 model = exp_stimside('./results/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
 priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)
