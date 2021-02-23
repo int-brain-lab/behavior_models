@@ -48,8 +48,9 @@ class Model():
         self.std_RW = std_RW
 
         self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
-        if (self.actions is not None) and (len(self.actions.shape)==1):
-            self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
+        if (self.actions is not None):
+            if (len(self.actions.shape)==1):
+                self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
             print('Launching in pseudo-session mode. In this mode, you only have access to the compute_prior method')
 
