@@ -345,3 +345,15 @@ def get_gpu_memory_map():
     
     return float(result)
 
+def make_transparent(plt):
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['bottom'].set_visible(False)
+    plt.gca().spines['left'].set_visible(False)
+    plt.xticks([], [])
+    plt.yticks([], [])
+
+def clean_up(plt):
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+
