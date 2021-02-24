@@ -10,17 +10,32 @@ class biased_Bayesian(model.Model):
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
-        name = 'biased_bayesian' + '_with_repBias' * repetition_bias
-        nb_params, lb_params, ub_params = 8, np.array([0, 0, 0, 0.5, 0, 0, 0, 0]), np.array([40, 50, 50, 1, 1, 1, .5, .5])
-        std_RW = np.array([.5, .5, 1, 0.01, 0.01, 0.01, 0.01, 0.01])
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False, loguniform_prior=True, UB_fit=False):
+        name = 'biased_bayesian' + '_with_repBias' * repetition_bias + '_with_logPriors' * loguniform_prior + '_UB_fitted' * (UB_fit == False)
+        if UB_fit and not loguniform_prior:
+            nb_params, lb_params, ub_params = 8, np.array([0, 0, 0, 0.5, 0, 0, 0, 0]), np.array([40, 50, 50, 1, 1, 1, .5, .5])
+            std_RW = np.array([.5, .5, 1, 0.01, 0.01, 0.01, 0.01, 0.01])
+        if not UB_fit and not loguniform_prior:
+            nb_params, lb_params, ub_params = 7, np.array([0, 0, 0.5, 0, 0, 0, 0]), np.array([40, 60, 1, 1, 1, .5, .5])
+            std_RW = np.array([1, 2, 0.01, 0.02, 0.02, 0.01, 0.01])            
+        elif not UB_fit and loguniform_prior:
+            # LB ~ logU([1, 40]) and  tau ~ logU([2, 100])
+            nb_params, lb_params, ub_params = 7, np.array([0, 0, 0.5, 0, 0, 0, 0]), np.array([np.log(40), np.log(100), 1, 1, 1, .5, .5])
+            std_RW = np.array([0.01, 0.01, 0.01, 0.02, 0.02, 0.01, 0.01])
+        else:
+            raise ValueError('model instance not supported')
+        self.loguniform_prior, self.UB_fit = loguniform_prior, UB_fit
         self.repetition_bias = repetition_bias
         if repetition_bias:
             nb_params += 1
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
-            std_RW = np.array([.5, .5, 1, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
+            std_RW = np.concatenate((std_RW, np.array([0.01])))
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
-        self.nb_blocklengths, self.nb_typeblocks = int(ub_params[:3].sum()), 3
+        self.nb_typeblocks = 3
+        if self.UB_fit:
+            self.nb_blocklengths = int(ub_params[:3].sum())
+        else:
+            self.nb_blocklengths = 100
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         '''
@@ -36,15 +51,27 @@ class biased_Bayesian(model.Model):
             prior (array of shape [nb_sessions, nb_chains, nb_trials]): prior for each chain and session
         '''
         nb_chains = len(arr_params)
-        if not self.repetition_bias:
+        if not self.repetition_bias and self.UB_fit and not self.loguniform_prior:
             tau0, tau1, tau2, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
-        else:
+            lb, tau, ub = tau0, tau0 + tau1, tau0 + tau1 + tau2
+        elif self.UB_fit and self.repetition_bias and not self.loguniform_prior:
             tau0, tau1, tau2, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+            lb, tau, ub = tau0, tau0 + tau1, tau0 + tau1 + tau2
+        elif not self.UB_fit and not self.loguniform_prior and not self.repetition_bias:
+            tau0, tau1, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+            lb, tau, ub = tau0, tau0 + tau1, torch.zeros(len(gamma), device=self.device, dtype=torch.float32) + self.nb_blocklengths
+        elif not self.UB_fit and self.loguniform_prior and self.repetition_bias:
+            loglb, logtau, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+            lb, tau, ub = torch.exp(loglb), torch.exp(logtau), torch.zeros(len(gamma), device=self.device, dtype=torch.float32) + self.nb_blocklengths            
+        elif not self.UB_fit and self.loguniform_prior and not self.repetition_bias:
+            loglb, logtau, gamma, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+            lb, tau, ub = torch.exp(loglb), torch.exp(logtau), torch.zeros(len(gamma), device=self.device, dtype=torch.float32) + self.nb_blocklengths
+        else:
+            raise ValueError('model instance not supported')
         act, stim, side = torch.tensor(act, device=self.device, dtype=torch.float32), torch.tensor(stim, device=self.device, dtype=torch.float32), torch.tensor(side, device=self.device, dtype=torch.float32)
         nb_sessions = len(act)
-        lb, tau, ub = tau0, tau0 + tau1, tau0 + tau1 + tau2
 
-        alpha = torch.zeros([nb_sessions, nb_chains, self.nb_trials, self.nb_blocklengths, self.nb_typeblocks], device=self.device, dtype=torch.float32)
+        alpha = torch.zeros([nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks], device=self.device, dtype=torch.float32)
         alpha[:, :, 0, 0, 1] = 1
         alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
         h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks * self.nb_blocklengths], device=self.device, dtype=torch.float32)
@@ -67,12 +94,12 @@ class biased_Bayesian(model.Model):
         transition = torch.stack([1e-12 + torch.transpose(l[k][:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1) for k in range(len(l))])        
         # likelihood
         Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
-        ones = torch.ones((nb_chains, nb_sessions, self.nb_trials) , device=self.device, dtype=torch.float32)
+        ones = torch.ones((nb_chains, nb_sessions, act.shape[-1]) , device=self.device, dtype=torch.float32)
         gamma_unsqueezed, side_unsqueezed = torch.unsqueeze(torch.unsqueeze(gamma, 1), -1), torch.unsqueeze(side, 0)        
         lks = torch.stack([gamma_unsqueezed*(side_unsqueezed==-1) + (1-gamma_unsqueezed) * (side_unsqueezed==1), ones * 1./2, gamma_unsqueezed*(side_unsqueezed==1) + (1-gamma_unsqueezed)*(side_unsqueezed==-1)]).T
         to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
 
-        for i_trial in range(self.nb_trials):
+        for i_trial in range(act.shape[-1]):
             if i_trial > 0:
                 alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
             h = alpha[:, :, i_trial] * lks[i_trial].repeat(1, 1, self.nb_blocklengths)
