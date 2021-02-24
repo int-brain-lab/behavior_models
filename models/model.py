@@ -257,7 +257,7 @@ class Model():
             sessions_id = np.arange(len(self.session_uuids))
             assert(len(self.session_uuids)==len(self.actions))
         if remove_old:
-            self.remove(sessions_id, self.train_method)
+            self.remove(sessions_id)
 
         path = self.build_path(self.session_uuids[sessions_id])
         if os.path.exists(path):

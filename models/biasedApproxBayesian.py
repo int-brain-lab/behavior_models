@@ -10,11 +10,12 @@ class biased_ApproxBayesian(model.Model):
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
-        name = 'biased_Approxbayesian' + '_with_repBias' * repetition_bias
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False, random_initial_block=False):
+        name = 'biased_Approxbayesian' + '_random_initial_block' * random_initial_block + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 6, np.array([0, 0.5, 0, 0, 0, 0]), np.array([.5, 1, 1, 1, .5, .5])
         std_RW = np.array([.02, 0.02, 0.02, 0.02, 0.01, 0.01])
         self.repetition_bias = repetition_bias
+        self.random_initial_block = random_initial_block
         if repetition_bias:
             nb_params += 1
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
@@ -44,7 +45,10 @@ class biased_ApproxBayesian(model.Model):
         nb_sessions = len(act)
 
         predictive = torch.zeros([nb_sessions, nb_chains, act.shape[-1], self.nb_typeblocks], device=self.device, dtype=torch.float32)
-        predictive[:, :, 0, 1] = 1
+        if self.random_initial_block:
+            predictive[:, :, 0, :] = 1./self.nb_typeblocks
+        else:
+            predictive[:, :, 0, 1] = 1
         h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks], device=self.device, dtype=torch.float32)
 
         zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
