@@ -108,7 +108,79 @@ class optimal_Bayesian(model.Model):
         #     torch.cuda.empty_cache()
 
         if return_details:
-            return np.array(torch.sum(logp_ch, axis=(0, -1))), priors
+            return logp_ch, priors
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
-        
+    def simulate(self, arr_params, stim, side, valid, nb_simul=50, ignore_likelihood=False):
+        '''
+        custom
+        '''
+        assert(stim.shape == side.shape), 'side and stim don\'t have the same shape'
+        if self.repetition_bias:
+            raise NotImplementedError
+
+        nb_chains = len(arr_params)
+        if arr_params.shape[-1] == 4:
+            zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+        else:
+            raise NotImplementedError
+
+        stim, side = torch.tensor(stim, device=self.device, dtype=torch.float32), torch.tensor(side, device=self.device, dtype=torch.float32)
+        nb_sessions = len(stim)
+        lb, tau, ub, gamma = 20, 60, 100, 0.8
+
+        alpha = torch.zeros([nb_sessions, nb_chains, stim.shape[-1], self.nb_blocklengths, self.nb_typeblocks], device=self.device, dtype=torch.float32)
+        alpha[:, :, 0, 0, 1] = 1
+        alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
+        h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks * self.nb_blocklengths], device=self.device, dtype=torch.float32)
+
+        if arr_params.shape[-1] == 4:
+            zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
+            lapses = unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0)
+        else:
+            zetas = unsqueeze(zeta)
+            lapses = unsqueeze(lapse)
+
+        # build transition matrix
+        b = torch.zeros([self.nb_blocklengths, 3, 3], device=self.device, dtype=torch.float32)
+        b[1:][:,0,0], b[1:][:,1,1], b[1:][:,2,2] = 1, 1, 1 # case when l_t > 0
+        b[0][0][-1], b[0][-1][0], b[0][1][np.array([0, 2])] = 1, 1, 1./2 # case when l_t = 1
+        n = torch.arange(1, self.nb_blocklengths+1, device=self.device, dtype=torch.float32)
+        ref    = torch.exp(-n/tau) * (lb <= n) * (ub >= n)
+        hazard = torch.cummax(ref/torch.flip(torch.cumsum(torch.flip(ref, (0,)), 0) + 1e-18, (0,)), 0)[0]
+        padding = torch.zeros(self.nb_blocklengths-1, device=self.device, dtype=torch.float32)
+        l = torch.cat((torch.unsqueeze(hazard, -1), torch.cat(
+                    (torch.diag(1 - hazard[:-1]), padding[np.newaxis]), axis=0)), axis=-1) # l_{t-1}, l_t
+        transition = 1e-12 + torch.transpose(l[:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1)        
+
+        # likelihood
+        Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
+        ones = torch.ones((nb_sessions, stim.shape[-1]), device=self.device, dtype=torch.float32)
+        lks = torch.stack([gamma*(side==-1) + (1-gamma) * (side==1), ones * 1./2, gamma*(side==1) + (1-gamma)*(side==-1)]).T
+
+        for i_trial in range(stim.shape[-1]):
+            # save priors
+            if i_trial > 0:
+                alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2)
+            h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(1, 1, self.nb_blocklengths)
+            h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
+
+        predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
+        Pis  = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
+        if not ignore_likelihood:
+            pRight, pLeft = Pis * Rhos, (1 - Pis) * (1 - Rhos)
+            pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
+            pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
+        else:
+            pRight, pLeft = (Pis > 0.5)*1. + Pis * (Pis==0.5), ((1 - Pis) > 0.5) * 1. + Pis * (Pis==0.5)
+            pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
+
+        act_sim = 2 * (torch.rand(nb_sessions, nb_chains, stim.shape[-1], nb_simul) < torch.unsqueeze(pActions[1], -1)) - 1
+
+        correct = (act_sim == side[:, np.newaxis, :, np.newaxis])
+        correct = np.array(correct, dtype=np.float)
+        valid_arr = np.tile(valid[:, np.newaxis,:,np.newaxis], (1, nb_chains, 1, nb_simul))
+        correct[valid_arr==False] = np.nan
+        perf = np.nanmean(correct, axis=(0, -2, -1))
+        return perf
+

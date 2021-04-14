@@ -66,8 +66,8 @@ class expSmoothing_stimside(model.Model):
 
         if self.repetition_bias:
             unsqueezed_rep_bias = torch.unsqueeze(torch.unsqueeze(torch.unsqueeze(rep_bias, 0), 0), -1)            
-            pActions[:,:,:,0] = pActions[:,:,:,0] * (1 - unsqueezed_lapses[:,:,:,0]) + unsqueezed_lapses[:,:,:,0] / 2.
-            pActions[:,:,:,1:] = pActions[:,:,:,1:] * (1 - unsqueezed_lapses[:,:,:,1:] - unsqueezed_rep_bias) + unsqueezed_lapses[:,:,:,1:] / 2. + unsqueezed_rep_bias * torch.unsqueeze(torch.stack(((act[:,:-1]==-1) * 1, (act[:,:-1]==1) * 1)), 2)
+            pActions[:,:,:,0]   = pActions[:,:,:,0] * (1 - unsqueezed_lapses[:,:,:,0]) + unsqueezed_lapses[:,:,:,0] / 2.
+            pActions[:,:,:,1:]  = pActions[:,:,:,1:] * (1 - unsqueezed_lapses[:,:,:,1:] - unsqueezed_rep_bias) + unsqueezed_lapses[:,:,:,1:] / 2. + unsqueezed_rep_bias * torch.unsqueeze(torch.stack(((act[:,:-1]==-1) * 1, (act[:,:-1]==1) * 1)), 2)
         else:
             pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
 
@@ -75,6 +75,64 @@ class expSmoothing_stimside(model.Model):
         p_ch     = torch.minimum(torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8))
         logp_ch  = torch.log(p_ch)
         if return_details:
-            return np.array(torch.sum(logp_ch, axis=(0, -1))), values[:, :, :, 1]
+            return logp_ch, values[:, :, :, 1]
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
+
+
+    def simulate(self, arr_params, stim, side, valid, nb_simul=50, decays=None, return_details=False):
+        '''
+        custom
+        '''
+        assert(stim.shape == side.shape), 'side and stim don\'t have the same shape'
+        if self.repetition_bias:
+            raise NotImplementedError
+        if arr_params.shape[1]!=4 and decays is not None:
+            raise NotImplementedError
+
+        nb_chains = len(arr_params)
+        if arr_params.shape[-1] == 5:
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        else:
+            zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+
+        stim, side = torch.tensor(stim), torch.tensor(side)
+        nb_sessions = len(stim)
+        
+        values = torch.zeros([nb_sessions, nb_chains, stim.shape[-1], 2], dtype=torch.float64) + 0.5
+        
+        zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
+        lapses = unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0)
+        Rho = torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0), torch.tensor(1e-7)), torch.tensor(1 - 1e-7))
+
+        if decays is None:
+            alpha = unsqueeze(alpha)
+        else:
+            alpha = torch.unsqueeze(torch.unsqueeze(torch.tensor(decays), 1), -1)
+
+        for t in range(stim.shape[-1]):
+            if t > 0:
+                s_prev = torch.stack([side[:, t - 1]==-1, side[:, t - 1]==1]) * 1
+                if alpha.shape[2] != stim.shape[-1]:
+                    values[:, :, t] = (1 - alpha) * values[:, :, t-1] + alpha * torch.unsqueeze(s_prev.T, 1)
+                else:
+                    values[:, :, t] = (1 - alpha[:,:,t]) * values[:, :, t-1] + alpha[:,:,t] * torch.unsqueeze(s_prev.T, 1)
+
+        pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
+        pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
+
+        pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
+
+        act_sim = 2 * (torch.rand(nb_sessions, nb_chains, stim.shape[-1], nb_simul) < torch.unsqueeze(pActions[1], -1)) - 1
+
+        correct = (act_sim == side[:, np.newaxis, :, np.newaxis])
+        correct = np.array(correct, dtype=np.float)
+        valid_arr = np.tile(valid[:, np.newaxis,:,np.newaxis], (1, nb_chains, 1, nb_simul))
+        correct[valid_arr==False] = np.nan
+        perf = np.nanmean(correct, axis=(0, -2, -1))
+
+        if return_details:
+            return act_sim
+
+        return perf
+
 

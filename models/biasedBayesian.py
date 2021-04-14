@@ -10,7 +10,7 @@ class biased_Bayesian(model.Model):
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False, loguniform_prior=True, UB_fit=False):
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False, loguniform_prior=False, UB_fit=False):
         name = 'biased_bayesian' + '_with_repBias' * repetition_bias + '_with_logPriors' * loguniform_prior + '_UB_fitted' * (UB_fit == False)
         if UB_fit and not loguniform_prior:
             nb_params, lb_params, ub_params = 8, np.array([0, 0, 0, 0.5, 0, 0, 0, 0]), np.array([40, 50, 50, 1, 1, 1, .5, .5])
@@ -136,7 +136,7 @@ class biased_Bayesian(model.Model):
         #     torch.cuda.empty_cache()
 
         if return_details:
-            return np.array(torch.sum(logp_ch, axis=(0, -1))), priors
+            return logp_ch, priors
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
         

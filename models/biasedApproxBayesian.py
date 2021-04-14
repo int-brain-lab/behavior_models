@@ -13,13 +13,13 @@ class biased_ApproxBayesian(model.Model):
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False, random_initial_block=False):
         name = 'biased_Approxbayesian' + '_random_initial_block' * random_initial_block + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 6, np.array([0, 0.5, 0, 0, 0, 0]), np.array([.5, 1, 1, 1, .5, .5])
-        std_RW = np.array([.02, 0.02, 0.02, 0.02, 0.01, 0.01])
+        std_RW = np.array([0.02, 0.02, 0.02, 0.02, 0.01, 0.01])
         self.repetition_bias = repetition_bias
         self.random_initial_block = random_initial_block
         if repetition_bias:
             nb_params += 1
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
-            std_RW = np.array([.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01])
+            std_RW = np.array([.02, 0.02, 0.05, 0.05, 0.01, 0.01, 0.01])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
         self.nb_typeblocks = 3
 
@@ -105,7 +105,7 @@ class biased_ApproxBayesian(model.Model):
         #     torch.cuda.empty_cache()
 
         if return_details:
-            return np.array(torch.sum(logp_ch, axis=(0, -1))), priors
+            return logp_ch, priors
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
         

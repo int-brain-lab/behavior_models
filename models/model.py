@@ -52,7 +52,7 @@ class Model():
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
-            print('Launching in pseudo-session mode. In this mode, you only have access to the compute_prior method')
+            print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
 
         if torch.cuda.is_available():
             self.use_gpu = True
@@ -323,11 +323,14 @@ class Model():
         else:
             print('no results were saved')
 
-    # act=self.actions; stim=self.stimuli; side=self.stim_side
-    def compute_prior(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
+    def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
+        return NotImplemented
+
+    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):        
         '''
-        Compute_prior method.
+        Compute signal method.
         Params:
+            signal: tells which signal we want to compute: `prior`, `prediction_error` or [`prior`, `prediction_error`].
             act (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer 
                 at one trial, pad with 0. If the sessions have different number of trials, pad the last trials with 0.
             stim (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have 
@@ -338,8 +341,22 @@ class Model():
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean' and 'maximum_a_posteriori' are available
         Ouput:
-            Computes the prior and accuracy for given act/stim/side   
+            Computes the prior and accuracy for given act/stim/side
         '''
+        return self._compute_signal(signal=signal, act=act, stim=stim, side=side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types='all', pLeft=None)
+
+    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft):
+        '''
+        internal function
+        '''
+        possible_signals = ['prior', 'prediction_error', 'score']
+        if (signal not in possible_signals) and np.any([signal[k] not in possible_signals for k in range(len(signal))]):
+            assert(False), 'possible signals are {}'.format(possible_signals)
+        assert(trial_types in ['all', '0_contrasts', 'unbiased'] or trial_types.startswith('reversals'))
+        if signal!='score' or 'score' not in signal:
+            if trial_types != 'all':
+                return NotImplemented('trial_types argument is only taken into account when computing the score')
+
         if (act is None) and (self.actions is None):
             print('no actions is specified')
         if (stim is None) and (self.stimuli is None):
@@ -363,7 +380,7 @@ class Model():
         if self.train_method=='MCMC': 
             assert(parameter_type in ['MAP', 'posterior_mean', 'whole_posterior']), 'parameter_type must be MAP, posterior_mean or whole_posterior'
         if self.train_method!='MCMC':
-            return NotImplemented
+            raise NotImplementedError
 
         if parameter_type=='posterior_mean':
             print('Using posterior mean')
@@ -378,14 +395,65 @@ class Model():
             parameters_chosen = self.params_list[-500:].reshape(-1, self.nb_params)
         if len(act.shape)==1:
             act, stim, side = act[np.newaxis], stim[np.newaxis], side[np.newaxis]
-        loglkd, priors = self.evaluate(parameters_chosen, return_details=True, act=act, stim=stim, side=side)
-        llk = logsumexp(loglkd) - np.log(len(loglkd))
-        accuracy = np.exp(llk/np.sum(act!=0))
-        return np.squeeze(np.mean(np.array(priors), axis=1)), llk, accuracy
 
-    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', remove_old=False, param=None):
+        output = self.evaluate(parameters_chosen, return_details=True, act=act, stim=stim, side=side)
+        loglkd, priors = output[0], output[1]
+
+        returned = {}
+        if signal == 'prior' or 'prior' in signal:
+            returned['prior'] = np.squeeze(np.mean(np.array(priors), axis=1))
+        if signal == 'prediction_error' or 'prediction_error' in signal:
+            if len(output)==2:
+                raise AssertionError('this model does not support prediction_error computation. Ask Charles Findling or modify the model accordingly')
+            prediction_error = output[2]
+            returned['prediction_error'] = prediction_error
+        if signal == 'score' or 'score' in signal:
+            if len(loglkd.shape)==3:
+                if trial_types!='all' and len(loglkd)>1:
+                    raise NotImplementedError('Accuracies on particular segments of sessions are implemented only for single sessions')
+                if trial_types=='all':
+                    loglkd = np.array(torch.sum(loglkd, axis=(0, -1)))
+                    llk = logsumexp(loglkd) - np.log(len(loglkd))
+                    accuracy = np.exp(llk/np.sum(np.array(act)!=0))
+                elif trial_types=='0_contrasts':
+                    trials_lkd = (act!=0) * (stim==0)
+                    loglkd_ = torch.sum(loglkd[0][:, trials_lkd[0]], axis=-1)
+                    llk = logsumexp(loglkd_) - np.log(len(loglkd_))
+                    accuracy = np.exp(llk/np.sum(trials_lkd))
+                elif trial_types.startswith('reversals'):                
+                    idx_reversal = np.where((pLeft[0][1:] != pLeft[0][:-1]) * (pLeft[0][1:]!=0))[0] + 1
+                    try:
+                        nb_trials = int(trial_types.split('_')[-1])
+                    except:
+                        print('The number of trials to take into account has not be specified. Falling back on the default value of 10 trials. If you want to specify the number of trials, change trial_types to for instance, reversals_nbTrials_20')
+                        nb_trials = 10
+                    trials_lkd = np.zeros(loglkd.shape[-1], dtype=np.bool)
+                    trials_lkd[np.minimum(idx_reversal[:, np.newaxis] + np.arange(nb_trials)[np.newaxis], len(trials_lkd)-1)] = True
+                    loglkd_ = torch.sum(loglkd[0][:, trials_lkd], axis=-1)
+                    llk = logsumexp(loglkd_) - np.log(len(loglkd_))
+                    accuracy = np.exp(llk/np.sum(trials_lkd))
+                elif trial_types=='unbiased':
+                    trials_lkd = (pLeft==0.5)
+                    loglkd_ = torch.sum(loglkd[0][:, trials_lkd[0]], axis=-1)
+                    llk = logsumexp(loglkd_) - np.log(len(loglkd_))
+                    accuracy = np.exp(llk/np.sum(trials_lkd))
+            elif trial_types!='all':
+                print('Warning: You have to modify the compute_lkd function')
+                llk, accuracy = 0, 0
+            else:
+                llk = logsumexp(loglkd) - np.log(len(loglkd))
+                accuracy = np.exp(llk/np.sum(act!=0))            
+            returned['llk'] = llk
+            returned['accuracy'] = accuracy
+        return returned
+
+    def compute_prior(self, *args):
+        raise AssertionError('This method is deprecated. call self.compute_internal_signal(signal=`prior`) instead. this was done to unify the computation of the prior and other internal signals such as the prediction error')
+
+    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', remove_old=False, param=None, trial_types='all', pLeft=None):
         '''
         Scores the model on session_id. NB: to implement cross validation, do not train and test on the same sessions
+        This methods allows for refined scoring when trial_types is specified.
         Params:
             sessions_id (array of int): gives the sessions used for the training (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
@@ -394,7 +462,12 @@ class Model():
         Outputs:
             accuracy and loglkd on new sessions
         '''
-        path = self.build_path(self.session_uuids[sessions_id], self.session_uuids[sessions_id_test])
+        if trial_types.startswith('reversals') or trial_types=='unbiased':
+            assert(pLeft is not None), 'pLeft must be specified to obtain score on trials after reversals'
+        if trial_types in ['all', '0_contrasts'] and pLeft is not None:
+            print('pLeft is obsolete for the trial_types specified!')
+
+        path = self.build_path(self.session_uuids[sessions_id], self.session_uuids[sessions_id_test], trial_types=trial_types)
         if (remove_old or param is not None) and os.path.exists(path):
             os.remove(path)
         elif os.path.exists(path):
@@ -406,19 +479,24 @@ class Model():
         self.load(sessions_id)
         act, stim, side = self.actions[sessions_id_test], self.stimuli[sessions_id_test], self.stim_side[sessions_id_test]
 
+        if pLeft is not None:
+            pLeft = pLeft[sessions_id_test]
+
         if param is not None:
+            raise NotImplementedError('The code is probably correct but should be sanity tested')
             print('custom parameters: {}'.format(param))
             loglkd, priors = self.evaluate(param[np.newaxis], return_details=True, act=act, stim=stim, side=side)
             accuracy = np.exp(loglkd/np.sum(act!=0))
-            print('accuracy on test sessions: {}'.format(accuracy))
+            print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
             return loglkd, accuracy
         else:
-            prior, loglkd, accuracy = self.compute_prior(act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type)
+            signals = self._compute_signal(['prior', 'score'], act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types=trial_types, pLeft=pLeft)
+            prior, loglkd, accuracy = signals['prior'], signals['llk'], signals['accuracy']
             pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
-            print('accuracy on test sessions: {}'.format(accuracy))
+            print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
         return loglkd, accuracy
 
-    def build_path(self, l_sessionuuids_train, l_sessionuuids_test=None):
+    def build_path(self, l_sessionuuids_train, l_sessionuuids_test=None, trial_types=None):
         '''
         Generates the path where the results will be saved
         Params:
@@ -433,9 +511,10 @@ class Model():
             path = self.path_results_mouse + 'train_{}_train{}.pkl'.format(self.train_method, str_sessionuuids)
             return path
         else:
+            assert(trial_types is not None), 'trial_types can not be None if l_sessionuuids_test is not None'
             str_sessionuuids_test = ''
             for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_sess{}_{}'.format(k+1, l_sessionuuids_test[k])
-            path = self.path_results_mouse + 'train_{}_train{}_test{}.pkl'.format(self.train_method, str_sessionuuids, str_sessionuuids_test)
+            path = self.path_results_mouse + 'train_{}_train{}_test{}_trialtype_{}.pkl'.format(self.train_method, str_sessionuuids, str_sessionuuids_test, trial_types)
             return path
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side

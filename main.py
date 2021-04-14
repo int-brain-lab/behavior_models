@@ -7,7 +7,7 @@ mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
 stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
 
 # select particular mice
-mouse_name = 'NYU-12'
+mouse_name = 'KS016'
 for i in range(len(sess_id)):
 	if mice_names[i] == mouse_name: # take only sessions of first mice
 	    data = utils.load_session(sess_id[i])
@@ -27,18 +27,19 @@ from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
 from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
 from models.optimalBayesian import optimal_Bayesian as optBay
 from models.biasedApproxBayesian import biased_ApproxBayesian as baisedApproxBay
+from models.biasedBayesian import biased_Bayesian
 
 '''
 If you are interested in fitting (and the prior) of the mice behavior
 '''
-model = exp_stimside('./results/', session_uuids, mouse_name, actions, stimuli, stim_side)
-model.load_or_train()
+model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions, stimuli, stim_side)
+model.load_or_train(remove_old=False)
 param = model.get_parameters() # if you want the parameters
-priors, llk, accuracy = model.compute_prior() # compute prior
+signals = model.compute_signal(signal=['prior', 'prediction_error', 'score']) # compute signals of interest
 
 '''
 if you are interested in pseudo-sessions. NB the model has to previously be trained
 It will return an Error if the model has not been trained
 '''
-model = exp_stimside('./results/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
-priors, llk, accuracy = model.compute_prior(actions, stimuli, stim_side)
+model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
+signals = model.compute_signal(signal=['prior', 'prediction_error', 'score'], act=actions, stim=stimuli, side=stim_side)
