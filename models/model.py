@@ -326,7 +326,7 @@ class Model():
     def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
         return NotImplemented
 
-    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):        
+    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=True):        
         '''
         Compute signal method.
         Params:
@@ -343,9 +343,9 @@ class Model():
         Ouput:
             Computes the prior and accuracy for given act/stim/side
         '''
-        return self._compute_signal(signal=signal, act=act, stim=stim, side=side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types='all', pLeft=None)
+        return self._compute_signal(signal=signal, act=act, stim=stim, side=side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types='all', pLeft=None, verbose=verbose)
 
-    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft):
+    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft, verbose):
         '''
         internal function
         '''
@@ -383,15 +383,18 @@ class Model():
             raise NotImplementedError
 
         if parameter_type=='posterior_mean':
-            print('Using posterior mean')
+            if verbose:
+                print('Using posterior mean')
             nb_steps = len(self.params_list)
             parameters_chosen = self.params_list[-500:].mean(axis=(0,1))[np.newaxis]
         elif parameter_type=='maximum_a_posteriori':
-            print('Using MAP')
+            if verbose:
+                print('Using MAP')
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))
             parameters_chosen = self.params_list[xmax[0], ymax[0]][np.newaxis]
         elif parameter_type=='whole_posterior':
-            print('Using whole posterior')
+            if verbose:
+                print('Using whole posterior')
             parameters_chosen = self.params_list[-500:].reshape(-1, self.nb_params)
         if len(act.shape)==1:
             act, stim, side = act[np.newaxis], stim[np.newaxis], side[np.newaxis]

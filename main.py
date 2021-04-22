@@ -35,7 +35,7 @@ If you are interested in fitting (and the prior) of the mice behavior
 model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions, stimuli, stim_side)
 model.load_or_train(remove_old=False)
 param = model.get_parameters() # if you want the parameters
-signals = model.compute_signal(signal=['prior', 'prediction_error', 'score']) # compute signals of interest
+signals = model.compute_signal(signal=['prior', 'prediction_error', 'score'], verbose=False) # compute signals of interest
 
 '''
 if you are interested in pseudo-sessions. NB the model has to previously be trained
