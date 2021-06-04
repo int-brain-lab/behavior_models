@@ -349,7 +349,7 @@ class Model():
         '''
         internal function
         '''
-        possible_signals = ['prior', 'prediction_error', 'score']
+        possible_signals = ['prior', 'prediction_error', 'score', 'marginal_likelihood', 'maximum_likelihood']
         if (signal not in possible_signals) and np.any([signal[k] not in possible_signals for k in range(len(signal))]):
             assert(False), 'possible signals are {}'.format(possible_signals)
         assert(trial_types in ['all', '0_contrasts', 'unbiased'] or trial_types.startswith('reversals'))
@@ -410,6 +410,16 @@ class Model():
                 raise AssertionError('this model does not support prediction_error computation. Ask Charles Findling or modify the model accordingly')
             prediction_error = output[2]
             returned['prediction_error'] = prediction_error
+        if signal=='marginal_likelihood' or 'marginal_likelihood' in signal:   
+            if len(loglkd.shape)==3:
+                returned['marginal_likelihood'] = np.log(loglkd.shape[-2]) - logsumexp(-(loglkd.sum(axis=(0, -1))))
+            else:
+                raise NotImplementedError
+        if signal=='maximum_likelihood' or 'maximum_likelihood' in signal:
+            if len(loglkd.shape)==3:
+                returned['maximum_likelihood'] = torch.max(loglkd.sum(axis=(0, -1)))
+            else:
+                raise NotImplementedError                
         if signal == 'score' or 'score' in signal:
             if len(loglkd.shape)==3:
                 if trial_types!='all' and len(loglkd)>1:

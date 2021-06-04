@@ -1,6 +1,6 @@
 # load ONE and mice
 import numpy as np
-import utils
+import utils, torch
 from oneibl.one import ONE
 one = ONE()
 mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
@@ -23,23 +23,22 @@ stimuli, actions, stim_side = utils.format_input(stimuli_arr, actions_arr, stim_
 session_uuids = np.array(session_uuids)
 
 # import models
-from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
-from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
-from models.optimalBayesian import optimal_Bayesian as optBay
-from models.biasedApproxBayesian import biased_ApproxBayesian as baisedApproxBay
-from models.biasedBayesian import biased_Bayesian
+from models.expSmoothing_prevAction_SE import expSmoothing_prevAction_SE as exp_prevAction_SE
+from models.expSmoothing_stimside_SE import expSmoothing_stimside_SE as exp_stimSide_SE
 
 '''
 If you are interested in fitting (and the prior) of the mice behavior
 '''
-model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions, stimuli, stim_side)
+stimulated = torch.randint(2, size=actions.shape)
+model = exp_prevAction_SE('./results/inference/', session_uuids, mouse_name, actions, stimuli, stim_side, stimulated)
 model.load_or_train(remove_old=False)
 param = model.get_parameters() # if you want the parameters
-signals = model.compute_signal(signal=['prior', 'prediction_error', 'score'], verbose=False) # compute signals of interest
+signals = model.compute_signal(signal=['prior', 'prediction_error', 'maximum_likelihood'], verbose=False) # compute signals of interest
+
 
 '''
 if you are interested in pseudo-sessions. NB the model has to previously be trained
 It will return an Error if the model has not been trained
 '''
 model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
-signals = model.compute_signal(signal=['prior', 'prediction_error', 'score'], act=actions, stim=stimuli, side=stim_side)
+signals = model.compute_signal(signal=['prior', 'prediction_error', 'maximum_likelihood'], act=actions, stim=stimuli, side=stim_side)
