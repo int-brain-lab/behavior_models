@@ -1,6 +1,7 @@
+from models import utils
 import numpy as np
 from scipy.stats import truncnorm
-import os, pickle, utils, itertools
+import os, pickle
 from tqdm import tqdm
 from scipy.special import logsumexp
 import warnings, torch

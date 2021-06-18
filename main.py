@@ -1,6 +1,6 @@
 # load ONE and mice
 import numpy as np
-import utils
+from models import utils
 from oneibl.one import ONE
 one = ONE()
 mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
