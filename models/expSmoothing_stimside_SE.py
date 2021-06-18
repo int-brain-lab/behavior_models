@@ -66,3 +66,41 @@ class expSmoothing_stimside_SE(model.Model):
         if return_details:
             return logp_ch, values[:, :, :, 1], prediction_error
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
+
+
+    def simulate(self, arr_params, stim, side, stimulated, nb_simul=50):
+        '''
+        custom
+        '''
+        assert(stim.shape == side.shape), 'side and stim don\'t have the same shape'
+
+        if len(arr_params.shape) == 1:
+            arr_params = np.expand_dims(arr_params, 0)
+        nb_chains = len(arr_params)
+        if arr_params.shape[-1] == 6:
+            alpha_unstimulated, alpha_stimulated, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        else:
+            raise NotImplementedError
+        stim, side = torch.tensor(stim), torch.tensor(side)
+        nb_sessions = len(stim)
+
+        act_sim = torch.zeros(nb_sessions, nb_chains, stim.shape[-1], nb_simul)
+        values = torch.zeros([nb_sessions, nb_chains, stim.shape[-1], nb_simul, 2], dtype=torch.float64) + 0.5
+
+        alpha = torch.unsqueeze(unsqueeze(alpha_stimulated) * (torch.unsqueeze(stimulated,1)==1) + unsqueeze(alpha_unstimulated) * (torch.unsqueeze(stimulated,1)==0), -1)
+        zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
+        lapses = torch.unsqueeze(unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0), -1)
+        Rho = torch.unsqueeze(torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0.)), torch.tensor(1e-7)), torch.tensor(1 - 1e-7)), -1) # pRight likelihood
+
+        for t in range(stim.shape[-1]):
+            if t > 0:
+                s_prev = torch.unsqueeze(torch.unsqueeze(torch.stack([side[:, t - 1].T==-1, side[:, t - 1].T==1]) * 1, 1), 1)
+                values[:, :, t] = torch.unsqueeze(1 - alpha[:,:,t], -1) * values[:, :, t-1] + torch.unsqueeze(alpha[:,:,t], -1) * s_prev.T
+            pRight, pLeft = values[:, :, t, :, 0] * Rho[:, :, t], values[:, :, t, :, 1] * (1 - Rho[:, :, t])
+            pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
+            pActions = pActions * (1 - lapses[:, :, t]) + lapses[:, :, t] / 2.
+            act_sim[:, :, t] = 2 * (torch.rand(nb_sessions, nb_chains, nb_simul) < pActions[1]) - 1
+
+        return torch.squeeze(act_sim)
+
+
