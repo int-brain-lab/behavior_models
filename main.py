@@ -26,8 +26,6 @@ session_uuids = np.array(session_uuids)
 from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
 from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
 from models.optimalBayesian import optimal_Bayesian as optBay
-from models.biasedApproxBayesian import biased_ApproxBayesian as baisedApproxBay
-from models.biasedBayesian import biased_Bayesian
 
 '''
 If you are interested in fitting (and the prior) of the mice behavior
