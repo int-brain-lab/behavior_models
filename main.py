@@ -28,6 +28,10 @@ stimuli, actions, stim_side = utils.format_input(
     stimuli_arr, actions_arr, stim_sides_arr)
 session_uuids = np.array(session_uuids)
 
+# import models
+from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
+from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
+from models.optimalBayesian import optimal_Bayesian as optBay
 
 '''
 If you are interested in fitting (and the prior) of the mice behavior
@@ -44,8 +48,5 @@ signals = model.compute_signal(
 if you are interested in pseudo-sessions. NB the model has to previously be trained
 It will return an Error if the model has not been trained
 '''
-model = exp_prevAction('./results/inference/', session_uuids,
-                       mouse_name, actions=None, stimuli=None, stim_side=None)
-signals = model.compute_signal(signal=[
-                               'prior', 'prediction_error', 'score'], act=actions, stim=stimuli,
-							   side=stim_side)
+model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
+signals = model.compute_signal(signal=['prior', 'prediction_error', 'score'], act=actions, stim=stimuli, side=stim_side)
