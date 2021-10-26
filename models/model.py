@@ -246,7 +246,7 @@ class Model():
         '''
         return NotImplemented
 
-    def load_or_train(self, sessions_id=None, remove_old=False, **kwargs):
+    def load_or_train(self, sessions_id=None, remove_old=False, loadpath=None, **kwargs):
         '''
         Loads the model if the model has been previously trained, otherwise trains the model
         Params:
@@ -254,15 +254,23 @@ class Model():
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             remove_old (boolean): removes old saved files
         '''
-        if sessions_id is None:
+        if (loadpath is not None) and (not os.path.exists(loadpath)):
+            raise ValueError('when loadpath is specified, the corresponding model MUST exists')
+        if (loadpath is not None) and remove_old:
+            raise ValueError('when loadpath is specified, you can not remove it!')
+
+        if (sessions_id is None) and (loadpath is None):
             sessions_id = np.arange(len(self.session_uuids))
             assert(len(self.session_uuids)==len(self.actions))
+
         if remove_old:
             self.remove(sessions_id)
 
-        path = self.build_path(self.session_uuids[sessions_id])
-        if os.path.exists(path):
-            self.load(sessions_id)
+        if loadpath is None:
+            loadpath = self.build_path(self.session_uuids[sessions_id])
+
+        if os.path.exists(loadpath):
+            self.load(path=loadpath)
             print('results found and loaded')
         else:
             self.train(sessions_id, **kwargs)
@@ -289,7 +297,7 @@ class Model():
         else:
             return NotImplemented
 
-    def load(self, sessions_id):
+    def load(self, sessions_id=None, path=None):
         '''
         Load method. This method should not be called directly. Call the load_or_train() method instead
         Params:
@@ -298,8 +306,14 @@ class Model():
         Ouput:
             Loads an existing file.         
         '''
+        if (sessions_id is None) and (path is None):
+            raise ValueError('sessions_id and path can not both be None')
+        if (sessions_id is not None) and (path is not None):
+            raise ValueError('sessions_id and path can not both be not None')
+
         if self.train_method=='MCMC':
-            path = self.build_path(self.session_uuids[sessions_id])
+            if path is None:
+                path = self.build_path(self.session_uuids[sessions_id])
             try:
                 [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
             except:
