@@ -347,7 +347,7 @@ class Model():
     def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
         return NotImplemented
 
-    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=True):        
+    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=False):        
         '''
         Compute signal method.
         Params:
