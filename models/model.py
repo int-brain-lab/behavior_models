@@ -10,7 +10,7 @@ class Model():
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, train_method='MCMC'):
+    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, train_method='MCMC', verbose=False):
         '''
         Params:
             name (String): name of the model
@@ -31,9 +31,11 @@ class Model():
         self.name = name
         if train_method!='MCMC':
             raise NotImplementedError
-        self.train_method = train_method        
-        print('')
-        print('Initializing {} model'.format(name))
+        self.train_method = train_method
+        self.verbose = verbose
+        if verbose:
+            print('')
+            print('Initializing {} model'.format(name))
 
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
         assert(len(np.unique(self.session_uuids)) == len(self.session_uuids)), 'there is a problem in the session formatting. Contact Charles Findling'
@@ -53,16 +55,19 @@ class Model():
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
-            print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
+            if verbose:
+                print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
 
         if torch.cuda.is_available():
             self.use_gpu = True
             self.device = torch.device("cuda:0")
-            print("GPU is available")
+            if verbose:
+                print("GPU is available")
         else:
             self.use_gpu = False
             self.device = torch.device("cpu")
-            print("no GPU found")
+            if verbose:
+                print("no GPU found")
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):
@@ -271,7 +276,8 @@ class Model():
 
         if os.path.exists(loadpath):
             self.load(path=loadpath)
-            print('results found and loaded')
+            if self.verbose:
+                print('results found and loaded')
         else:
             self.train(sessions_id, **kwargs)
 
