@@ -342,7 +342,8 @@ class Model():
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean' and 'maximum_a_posteriori' are available
         Ouput:
             Computes the prior and accuracy for given act/stim/side
-        '''
+        We use an auxiliary more general function which is used at some other point - thus pLeft=None in the _compute_signal call
+        '''        
         return self._compute_signal(signal=signal, act=act, stim=stim, side=side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types='all', pLeft=None, verbose=verbose)
 
     def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft, verbose):

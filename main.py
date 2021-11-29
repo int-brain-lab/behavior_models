@@ -30,6 +30,9 @@ from models.optimalBayesian import optimal_Bayesian as optBay
 '''
 If you are interested in fitting (and the prior) of the mice behavior
 '''
+
+model = optBay('./results/inference/', session_uuids, mouse_name, actions, stimuli, stim_side)
+
 model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions, stimuli, stim_side)
 model.load_or_train(remove_old=False)
 param = model.get_parameters() # if you want the parameters

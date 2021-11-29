@@ -62,10 +62,10 @@ class optimal_Bayesian(model.Model):
         padding = torch.zeros(self.nb_blocklengths-1, device=self.device, dtype=torch.float32)
         l = torch.cat((torch.unsqueeze(hazard, -1), torch.cat(
                     (torch.diag(1 - hazard[:-1]), padding[np.newaxis]), axis=0)), axis=-1) # l_{t-1}, l_t
-        transition = 1e-12 + torch.transpose(l[:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1)        
+        transition = 1e-12 + torch.transpose(l[:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1)
 
         # likelihood
-        Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0)
+        Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0))
         ones = torch.ones((nb_sessions, act.shape[-1]), device=self.device, dtype=torch.float32)
         lks = torch.stack([gamma*(side==-1) + (1-gamma) * (side==1), ones * 1./2, gamma*(side==1) + (1-gamma)*(side==-1)]).T
         to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
@@ -82,7 +82,7 @@ class optimal_Bayesian(model.Model):
         pRight, pLeft = Pis * Rhos, (1 - Pis) * (1 - Rhos)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
-        unsqueezed_lapses = torch.unsqueeze(lapses, 0)        
+        unsqueezed_lapses = torch.unsqueeze(lapses, 0)
 
         if self.repetition_bias:
             unsqueezed_rep_bias = torch.unsqueeze(torch.unsqueeze(torch.unsqueeze(rep_bias, 0), 0), -1)
