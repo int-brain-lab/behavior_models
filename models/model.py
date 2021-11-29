@@ -16,11 +16,11 @@ class Model():
             path_to_results (String): path where results will be saved
             session_uuids (array of strings): session_uuid for each session
             mouse_name (string): name of mice
-            actions (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer 
+            actions (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer
                 at one trial, pad with 0. If the sessions have different number of trials, pad the last trials with 0.
-            stimuli (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have 
+            stimuli (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have
                 different number of trials, pad the last trials with 0.
-            stim_side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1). 
+            stim_side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1).
                 If the sessions have different number of trials, pad the last trials with 0.
             nb_params (int): nb of parameters of the model (these parameters will be inferred)
             lb_params (array of floats): lower bounds of parameters (e.g., if `nb_params=3`, np.array([0, 0, -np.inf]))
@@ -30,7 +30,7 @@ class Model():
         self.name = name
         if train_method!='MCMC':
             raise NotImplementedError
-        self.train_method = train_method        
+        self.train_method = train_method
         print('')
         print('Initializing {} model'.format(name))
 
@@ -69,7 +69,7 @@ class Model():
         Perform with inference MCMC
         Params:
             sessions_id (array of int): gives the sessions to be used for the training (for instance, if you have 4 sessions,
-                and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2])).        
+                and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2])).
             std_RM (float) : standard deviation of the random walk for proposal.
             nb_chains (int) : number of MCMC chains to run in parallel
             nb_steps (int) : number of MCMC steps
@@ -83,7 +83,7 @@ class Model():
             import sobol_seq
             grid = np.array(sobol_seq.i4_sobol_generate(self.nb_params, nb_chains))
             initial_point = self.lb_params + grid * (self.ub_params - self.lb_params)
-        
+
         if nb_steps is None:
             nb_steps, early_stop = int(5000), True
             if self.nb_params <= 5:
@@ -91,11 +91,11 @@ class Model():
             else:
                 Nburn, nb_minimum = 1000, 2000
             print('Launching MCMC procedure with {} chains, {} max steps and {} std_RW. Early stopping is activated'.format(nb_chains, nb_steps, std_RW))
-        else:            
+        else:
             early_stop = False
             Nburn = int(nb_steps/2)
             print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))
-        
+
         if len(initial_point.shape) == 1:
             initial_point = np.tile(initial_point[np.newaxis], (nb_chains, 1))
 
@@ -115,7 +115,7 @@ class Model():
                 proposal = truncnorm.rvs(a, b, params_list[-1], std_RW)
                 a_p, b_p = (self.lb_params - proposal) / std_RW, (self.ub_params - proposal) / std_RW
                 prop_liks = self.evaluate(proposal, sessions_id, clean_up_gpu_memory=False)
-                log_alpha = (prop_liks - lkd_list[-1] 
+                log_alpha = (prop_liks - lkd_list[-1]
                             + truncnorm.logpdf(params_list[-1], a_p, b_p, proposal, std_RW).sum(axis=1)
                             - truncnorm.logpdf(proposal, a, b, params_list[-1], std_RW).sum(axis=1))
             else:
@@ -192,7 +192,7 @@ class Model():
             return NotImplemented
         nb_samples, nb_chains, _ = parameters.shape
         chain_mean = parameters.mean(axis=0)
-        post_mean = chain_mean.mean(axis=0)        
+        post_mean = chain_mean.mean(axis=0)
         B = nb_samples/(nb_chains - 1) * np.sum((chain_mean - post_mean)**2, axis=0)
         chain_var = np.sum((parameters - (chain_mean[np.newaxis]))**2, axis=0)/(nb_samples - 1)
         W = 1/(nb_chains) * np.sum(chain_var, axis=0)
@@ -209,7 +209,7 @@ class Model():
         Params:
             arr_params (nd array of size [nb_chains, nb_params]): parameters for which the likelihood will
             be computed
-            sessions_id (array of int): gives the sessions on which we want to compute the likelihood (for instance, 
+            sessions_id (array of int): gives the sessions on which we want to compute the likelihood (for instance,
                 if you have 4 sessions, and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             return_details (boolean): if true returns the prior + the loglikelihood. if false, only returns the loglikelihood
         Output:
@@ -217,7 +217,7 @@ class Model():
         '''
         if sessions_id is None and 'act' not in kwargs.keys():
             assert(False), 'session ids must be specified or explicit action/stimuli/stim_side must be passed in kwargs'
-        
+
         if (self.actions is None) and ('act' not in kwargs.keys()): raise ValueError('No action specified')
         if (self.stimuli is None) and ('stim' not in kwargs.keys()): raise ValueError('No stimuli specified')
         if (self.stim_side is None) and ('side' not in kwargs.keys()): raise ValueError('No stim side specified')
@@ -237,7 +237,7 @@ class Model():
             res = self.compute_lkd(arr_params, act, stim, side, return_details)
         if self.use_gpu and clean_up_gpu_memory:
             torch.cuda.empty_cache()
-        return res            
+        return res
 
     def compute_lkd(arr_params, act, stim, side, return_details):
         '''
@@ -273,7 +273,7 @@ class Model():
             sessions_id (array of int): gives the sessions to be used for the training (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
         Output:
-            a saved pickle file with the posterior distribution       
+            a saved pickle file with the posterior distribution
         '''
         if self.train_method=='MCMC':
             std_RW = utils.look_up(kwargs, 'std_RW', self.std_RW)
@@ -295,7 +295,7 @@ class Model():
             sessions_id (array of int): gives the sessions to be used for the loading (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
         Ouput:
-            Loads an existing file.         
+            Loads an existing file.
         '''
         if self.train_method=='MCMC':
             path = self.build_path(self.session_uuids[sessions_id])
@@ -326,16 +326,16 @@ class Model():
     def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
         return NotImplemented
 
-    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=True):        
+    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=True):
         '''
         Compute signal method.
         Params:
             signal: tells which signal we want to compute: `prior`, `prediction_error` or [`prior`, `prediction_error`].
-            act (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer 
+            act (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer
                 at one trial, pad with 0. If the sessions have different number of trials, pad the last trials with 0.
-            stim (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have 
+            stim (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have
                 different number of trials, pad the last trials with 0.
-            side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1). 
+            side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1).
                 If the sessions have different number of trials, pad the last trials with 0.
             sessions_id (array of int): gives the sessions used for the traning (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
@@ -345,7 +345,7 @@ class Model():
         '''
         return self._compute_signal(signal=signal, act=act, stim=stim, side=side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types='all', pLeft=None, verbose=verbose)
 
-    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft, verbose):
+    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft, verbose=True):
         '''
         internal function
         '''
@@ -377,7 +377,7 @@ class Model():
             else:
                 raise ValueError('the model has not be trained')
 
-        if self.train_method=='MCMC': 
+        if self.train_method=='MCMC':
             assert(parameter_type in ['MAP', 'posterior_mean', 'whole_posterior']), 'parameter_type must be MAP, posterior_mean or whole_posterior'
         if self.train_method!='MCMC':
             raise NotImplementedError
@@ -410,7 +410,7 @@ class Model():
                 raise AssertionError('this model does not support prediction_error computation. Ask Charles Findling or modify the model accordingly')
             prediction_error = output[2]
             returned['prediction_error'] = prediction_error
-        if signal=='marginal_likelihood' or 'marginal_likelihood' in signal:   
+        if signal=='marginal_likelihood' or 'marginal_likelihood' in signal:
             if len(loglkd.shape)==3:
                 returned['marginal_likelihood'] = np.log(loglkd.shape[-2]) - logsumexp(-(loglkd.sum(axis=(0, -1))))
             else:
@@ -419,7 +419,7 @@ class Model():
             if len(loglkd.shape)==3:
                 returned['maximum_likelihood'] = torch.max(loglkd.sum(axis=(0, -1)))
             else:
-                raise NotImplementedError                
+                raise NotImplementedError
         if signal == 'score' or 'score' in signal:
             if len(loglkd.shape)==3:
                 if trial_types!='all' and len(loglkd)>1:
@@ -433,7 +433,7 @@ class Model():
                     loglkd_ = torch.sum(loglkd[0][:, trials_lkd[0]], axis=-1)
                     llk = logsumexp(loglkd_) - np.log(len(loglkd_))
                     accuracy = np.exp(llk/np.sum(trials_lkd))
-                elif trial_types.startswith('reversals'):                
+                elif trial_types.startswith('reversals'):
                     idx_reversal = np.where((pLeft[0][1:] != pLeft[0][:-1]) * (pLeft[0][1:]!=0))[0] + 1
                     try:
                         nb_trials = int(trial_types.split('_')[-1])
@@ -455,7 +455,7 @@ class Model():
                 llk, accuracy = 0, 0
             else:
                 llk = logsumexp(loglkd) - np.log(len(loglkd))
-                accuracy = np.exp(llk/np.sum(act!=0))            
+                accuracy = np.exp(llk/np.sum(act!=0))
             returned['llk'] = llk
             returned['accuracy'] = accuracy
         return returned
@@ -463,14 +463,14 @@ class Model():
     def compute_prior(self, *args):
         raise AssertionError('This method is deprecated. call self.compute_internal_signal(signal=`prior`) instead. this was done to unify the computation of the prior and other internal signals such as the prediction error')
 
-    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', remove_old=False, param=None, trial_types='all', pLeft=None):
+    def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', remove_old=False, param=None, trial_types='all', pLeft=None, verbose=False):
         '''
         Scores the model on session_id. NB: to implement cross validation, do not train and test on the same sessions
         This methods allows for refined scoring when trial_types is specified.
         Params:
             sessions_id (array of int): gives the sessions used for the training (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
-            sessions_id_test (array of int): gives the sessions on which we want to test             
+            sessions_id_test (array of int): gives the sessions on which we want to test
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean' and 'maximum_a_posteriori' are available
         Outputs:
             accuracy and loglkd on new sessions
@@ -503,7 +503,7 @@ class Model():
             print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
             return loglkd, accuracy
         else:
-            signals = self._compute_signal(['prior', 'score'], act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types=trial_types, pLeft=pLeft)
+            signals = self._compute_signal(['prior', 'score'], act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types=trial_types, pLeft=pLeft, verbose=verbose)
             prior, loglkd, accuracy = signals['prior'], signals['llk'], signals['accuracy']
             pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
             print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
@@ -517,7 +517,7 @@ class Model():
             l_sessionuuids_test (array of int)
         Ouput:
             formatted path where the results are saved
-        '''        
+        '''
         str_sessionuuids = ''
         for k in range(len(l_sessionuuids_train)): str_sessionuuids += '_sess{}_{}'.format(k+1, l_sessionuuids_train[k])
         if l_sessionuuids_test is None:
@@ -538,7 +538,7 @@ class Model():
             sessions_id (array of int): gives the sessions on which the training took place (for instance, if you have 4 sessions,
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             parameter_type (string) : how the prior is computed wrt the parameters. 'posterior_mean', 'maximum_a_posteriori' and 'all' are available
-        '''        
+        '''
         if not hasattr(self, 'params_list'):
             if sessions_id is None:
                 sessions_id = np.arange(len(self.actions))
@@ -548,7 +548,7 @@ class Model():
             else:
                 print('call the load_or_train() function')
 
-        if self.train_method=='MCMC': 
+        if self.train_method=='MCMC':
             assert(parameter_type in ['maximum_a_posteriori', 'posterior_mean', 'all']), 'parameter_type must be maximum_a_posteriori, posterior_mean or all'
         if self.train_method!='MCMC':
             return NotImplemented
@@ -563,5 +563,5 @@ class Model():
             return parameters_chosen
         else:
             return self.params_list
-        
+
 
