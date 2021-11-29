@@ -1,6 +1,5 @@
 .vscode/
 results/
-<<<<<<< HEAD
 *.pyc
 __pycache__/
 dj_local_conf.json
@@ -11,6 +10,3 @@ figures/
 *.pkl
 results*/
 cross_validation.py
-=======
-*.pyc
->>>>>>> f97c03cc51f5bead29f31dc9a68c8644efb1ff9c
