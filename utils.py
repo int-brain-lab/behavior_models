@@ -1,4 +1,4 @@
-from oneibl.one import ONE
+from one.api import ONE
 import numpy as np
 from scipy.special import digamma, betainc, logsumexp
 import pickle
@@ -124,18 +124,18 @@ def load_session(sess_id, one=None):
     if one is None:
         one = ONE()
 
-    trialstypes = ['trials.choice',
-                   'trials.probabilityLeft',
-                   'trials.feedbackType',
-                   'trials.feedback_times',
-                   'trials.contrastLeft',
-                   'trials.contrastRight',
-                   'trials.goCue_times',
-                   'trials.stimOn_times',]
+    trialstypes = ['choice',
+                   'probabilityLeft',
+                   'feedbackType',
+                   'feedback_times',
+                   'contrastLeft',
+                   'contrastRight',
+                   'goCue_times',
+                   'stimOn_times',]
 
-    tmp = one.load(sess_id, dataset_types=trialstypes)
+    tmp = one.load_object(sess_id, 'trials')
     # Break container out into a dict with labels
-    trialdata = {x.split('.')[1]: tmp[i] for i, x in enumerate(trialstypes)}
+    trialdata = {k: tmp[k] for k in trialstypes}
 
     return trialdata
 
@@ -356,4 +356,3 @@ def make_transparent(plt):
 def clean_up(plt):
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
-
