@@ -1,5 +1,5 @@
-from models import model
-import torch, utils
+from models import model, utils
+import torch
 import numpy as np
 from torch.distributions.normal import Normal
 
@@ -56,9 +56,9 @@ class expSmoothing_stimside(model.Model):
                 values[act[:,t-1]!=0, :, t] = (1 - alpha) * values[act[:,t-1]!=0, :, t-1] + alpha * torch.unsqueeze(s_prev.T[act[:,t-1]!=0], 1)
                 values[act[:,t-1]==0, :, t] = values[act[:,t-1]==0, :, t-1]
 
-        assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-6)
+                assert(torch.max(torch.abs(torch.sum(values[:, :, :t+1], axis=-1) - 1)) < 1e-6)
 
-        Rho = torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0), torch.tensor(1e-7)), torch.tensor(1 - 1e-7)) # pRight likelihood
+        Rho = torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)), torch.tensor(1e-7)), torch.tensor(1 - 1e-7)) # pRight likelihood
         pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 

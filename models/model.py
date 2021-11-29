@@ -1,6 +1,7 @@
+from models import utils
 import numpy as np
 from scipy.stats import truncnorm
-import os, pickle, utils, itertools
+import os, pickle
 from tqdm import tqdm
 from scipy.special import logsumexp
 import warnings, torch
@@ -9,7 +10,7 @@ class Model():
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, train_method='MCMC'):
+    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, train_method='MCMC', verbose=False):
         '''
         Params:
             name (String): name of the model
@@ -30,9 +31,11 @@ class Model():
         self.name = name
         if train_method!='MCMC':
             raise NotImplementedError
-        self.train_method = train_method        
-        print('')
-        print('Initializing {} model'.format(name))
+        self.train_method = train_method
+        self.verbose = verbose
+        if verbose:
+            print('')
+            print('Initializing {} model'.format(name))
 
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
         assert(len(np.unique(self.session_uuids)) == len(self.session_uuids)), 'there is a problem in the session formatting. Contact Charles Findling'
@@ -52,16 +55,19 @@ class Model():
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
-            print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
+            if verbose:
+                print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
 
         if torch.cuda.is_available():
             self.use_gpu = True
             self.device = torch.device("cuda:0")
-            print("GPU is available")
+            if verbose:
+                print("GPU is available")
         else:
             self.use_gpu = False
             self.device = torch.device("cpu")
-            print("no GPU found")
+            if verbose:
+                print("no GPU found")
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):
@@ -245,7 +251,7 @@ class Model():
         '''
         return NotImplemented
 
-    def load_or_train(self, sessions_id=None, remove_old=False, **kwargs):
+    def load_or_train(self, sessions_id=None, remove_old=False, loadpath=None, **kwargs):
         '''
         Loads the model if the model has been previously trained, otherwise trains the model
         Params:
@@ -253,16 +259,25 @@ class Model():
                 and you want to train only of the first 3, put sessions_ids = np.array([0, 1, 2]))
             remove_old (boolean): removes old saved files
         '''
-        if sessions_id is None:
+        if (loadpath is not None) and (not os.path.exists(loadpath)):
+            raise ValueError('when loadpath is specified, the corresponding model MUST exists')
+        if (loadpath is not None) and remove_old:
+            raise ValueError('when loadpath is specified, you can not remove it!')
+
+        if (sessions_id is None) and (loadpath is None):
             sessions_id = np.arange(len(self.session_uuids))
             assert(len(self.session_uuids)==len(self.actions))
+
         if remove_old:
             self.remove(sessions_id)
 
-        path = self.build_path(self.session_uuids[sessions_id])
-        if os.path.exists(path):
-            self.load(sessions_id)
-            print('results found and loaded')
+        if loadpath is None:
+            loadpath = self.build_path(self.session_uuids[sessions_id])
+
+        if os.path.exists(loadpath):
+            self.load(path=loadpath)
+            if self.verbose:
+                print('results found and loaded')
         else:
             self.train(sessions_id, **kwargs)
 
@@ -288,7 +303,7 @@ class Model():
         else:
             return NotImplemented
 
-    def load(self, sessions_id):
+    def load(self, sessions_id=None, path=None):
         '''
         Load method. This method should not be called directly. Call the load_or_train() method instead
         Params:
@@ -297,8 +312,14 @@ class Model():
         Ouput:
             Loads an existing file.         
         '''
+        if (sessions_id is None) and (path is None):
+            raise ValueError('sessions_id and path can not both be None')
+        if (sessions_id is not None) and (path is not None):
+            raise ValueError('sessions_id and path can not both be not None')
+
         if self.train_method=='MCMC':
-            path = self.build_path(self.session_uuids[sessions_id])
+            if path is None:
+                path = self.build_path(self.session_uuids[sessions_id])
             try:
                 [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
             except:
@@ -326,7 +347,7 @@ class Model():
     def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
         return NotImplemented
 
-    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=True):        
+    def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=False):        
         '''
         Compute signal method.
         Params:
