@@ -1,0 +1,12 @@
+.vscode/
+results/
+*.pyc
+__pycache__/
+dj_local_conf.json
+analyze.py
+models/__pycache__/
+figures/
+.DS_Store
+*.pkl
+results*/
+cross_validation.py
