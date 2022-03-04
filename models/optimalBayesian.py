@@ -57,7 +57,7 @@ class optimal_Bayesian(model.Model):
         b[1:][:,0,0], b[1:][:,1,1], b[1:][:,2,2] = 1, 1, 1 # case when l_t > 0
         b[0][0][-1], b[0][-1][0], b[0][1][np.array([0, 2])] = 1, 1, 1./2 # case when l_t = 1
         n = torch.arange(1, self.nb_blocklengths+1, device=self.device, dtype=torch.float32)
-        ref    = torch.exp(-n/tau) * (lb <= n) * (ub >= n)
+        ref = torch.exp(-n/tau) * (lb <= n) * (ub >= n)
         hazard = torch.cummax(ref/torch.flip(torch.cumsum(torch.flip(ref, (0,)), 0) + 1e-18, (0,)), 0)[0]
         padding = torch.zeros(self.nb_blocklengths-1, device=self.device, dtype=torch.float32)
         l = torch.cat((torch.unsqueeze(hazard, -1), torch.cat(
@@ -78,7 +78,7 @@ class optimal_Bayesian(model.Model):
             h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
 
         predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
-        Pis  = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
+        Pis = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
         pRight, pLeft = Pis * Rhos, (1 - Pis) * (1 - Rhos)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
@@ -92,10 +92,10 @@ class optimal_Bayesian(model.Model):
             pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
 
         pActions[torch.isnan(pActions)] = 0
-        p_ch     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
+        p_ch = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
 
         p_ch_cpu = torch.tensor(p_ch.detach(), device='cpu')
-        priors   = 1 - torch.tensor(Pis.detach(), device='cpu')
+        priors = 1 - torch.tensor(Pis.detach(), device='cpu')
         logp_ch = torch.log(torch.minimum(torch.maximum(p_ch_cpu, torch.tensor(1e-8)), torch.tensor(1 - 1e-8)))
 
         # clean up gpu memory
@@ -146,7 +146,7 @@ class optimal_Bayesian(model.Model):
         b[1:][:,0,0], b[1:][:,1,1], b[1:][:,2,2] = 1, 1, 1 # case when l_t > 0
         b[0][0][-1], b[0][-1][0], b[0][1][np.array([0, 2])] = 1, 1, 1./2 # case when l_t = 1
         n = torch.arange(1, self.nb_blocklengths+1, device=self.device, dtype=torch.float32)
-        ref    = torch.exp(-n/tau) * (lb <= n) * (ub >= n)
+        ref = torch.exp(-n/tau) * (lb <= n) * (ub >= n)
         hazard = torch.cummax(ref/torch.flip(torch.cumsum(torch.flip(ref, (0,)), 0) + 1e-18, (0,)), 0)[0]
         padding = torch.zeros(self.nb_blocklengths-1, device=self.device, dtype=torch.float32)
         l = torch.cat((torch.unsqueeze(hazard, -1), torch.cat(

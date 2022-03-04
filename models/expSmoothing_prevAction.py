@@ -53,15 +53,15 @@ class expSmoothing_prevAction(model.Model):
         pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
-        belief     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1)
-        correct    = (act == side) * 1 
+        belief = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1)
+        correct = (act == side) * 1
         prediction_error = (torch.unsqueeze(correct, 1) - belief)
 
         pActions = pActions * (1 - lapses) + lapses / 2.
 
-        p_ch     = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
-        p_ch     = torch.minimum(torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8))
-        logp_ch  = torch.log(p_ch)
+        p_ch = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
+        p_ch = torch.minimum(torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8))
+        logp_ch = torch.log(p_ch)
         if return_details:
             return logp_ch, values[:, :, :, 1], prediction_error
         return np.array(torch.sum(logp_ch, axis=(0, -1)))

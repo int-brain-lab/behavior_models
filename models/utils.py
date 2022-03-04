@@ -7,87 +7,101 @@ from itertools import accumulate
 import sobol_seq
 from scipy.stats import truncnorm, norm
 
-def format_input(stimuli_arr, actions_arr, stim_sides_arr):
+
+def format_input(stimuli_arr, actions_arr, stim_sides_arr, pLeft_arr=None):
     # get maximum number of trials across sessions
     max_len = np.array([len(stimuli_arr[k]) for k in range(len(stimuli_arr))]).max()
     # pad with 0 such that we obtain nd arrays of size nb_sessions x nb_trials and convert to arrays
-    stimuli    = np.array([np.concatenate((stimuli_arr[k], np.zeros(max_len-len(stimuli_arr[k])))) for k in range(len(stimuli_arr))])
-    actions     = np.array([np.concatenate((actions_arr[k], np.zeros(max_len-len(actions_arr[k])))) for k in range(len(actions_arr))])
-    stim_side    = np.array([np.concatenate((stim_sides_arr[k], np.zeros(max_len-len(stim_sides_arr[k])))) for k in range(len(stim_sides_arr))])
+    stimuli = np.array(
+        [np.concatenate((stimuli_arr[k], np.zeros(max_len - len(stimuli_arr[k])))) for k in range(len(stimuli_arr))])
+    actions = np.array(
+        [np.concatenate((actions_arr[k], np.zeros(max_len - len(actions_arr[k])))) for k in range(len(actions_arr))])
+    stim_side = np.array([np.concatenate((stim_sides_arr[k], np.zeros(max_len - len(stim_sides_arr[k])))) for k in
+                          range(len(stim_sides_arr))])
+    if pLeft_arr is not None:
+        pLeft = np.array(
+            [np.concatenate((pLeft_arr[k], np.zeros(max_len - len(pLeft_arr[k])))) for k in range(len(pLeft_arr))])
+        return stimuli, actions, stim_side, pLeft
     return stimuli, actions, stim_side
 
+
 def look_up(dic, key, val):
-    if key in dic.keys(): 
+    if key in dic.keys():
         return dic[key]
     else:
         return val
+
 
 def generate_stim():
     one = ONE()
     all_stimuli, all_dates = {}, {}
     mice_names, ins, ins_id, sess_id, time_stamps = get_bwm_ins_alyx(one)
     for idx in range(len(sess_id)):
-       # data = load_session(sess_id[idx])
-      #  stim_side, stimuli, actions, pLeft_oracle = format_data(data)
-     #   all_stimuli[sess_id[idx]] = stim_side
-        all_dates[sess_id[idx]] = time_stamps[sess_id==sess_id[idx]]
-    #pickle.dump(all_stimuli, open('data/stimuli.pkl', 'wb'))
+        # data = load_session(sess_id[idx])
+        #  stim_side, stimuli, actions, pLeft_oracle = format_data(data)
+        #   all_stimuli[sess_id[idx]] = stim_side
+        all_dates[sess_id[idx]] = time_stamps[sess_id == sess_id[idx]]
+    # pickle.dump(all_stimuli, open('data/stimuli.pkl', 'wb'))
     pickle.dump(all_dates, open('data/all_dates.pkl', 'wb'))
 
+
 def trunc_exp(n, tau, lb, ub):
-    return np.exp(-n/tau) * (n >= lb) * (n <= ub)
+    return np.exp(-n / tau) * (n >= lb) * (n <= ub)
+
 
 def hazard_f(x, tau, lb, ub):
-    return trunc_exp(x, tau, lb, ub)/np.sum(trunc_exp(np.linspace(x,x+ub,ub+1), tau, lb, ub), axis=0)
+    return trunc_exp(x, tau, lb, ub) / np.sum(trunc_exp(np.linspace(x, x + ub, ub + 1), tau, lb, ub), axis=0)
+
 
 def perform_inference(stim_side, tau=60, gamma=0.8, lb=20, ub=100):
-
     nb_trials, nb_blocklengths, nb_typeblocks = len(stim_side), ub, 3
-    h      = np.zeros([nb_trials, nb_blocklengths, nb_typeblocks])
-    priors = np.zeros([nb_trials, nb_blocklengths, nb_typeblocks]) - np.inf    
+    h = np.zeros([nb_trials, nb_blocklengths, nb_typeblocks])
+    priors = np.zeros([nb_trials, nb_blocklengths, nb_typeblocks]) - np.inf
     # at the beginning of the task (0), current length is 1 (0) and block type is unbiased (1)
     h[0, 0, 1], priors[0, 0, 1] = 0, 0
     hazard = hazard_f(np.arange(1, ub + 1), tau=tau, lb=lb, ub=ub)
     l = np.concatenate((np.expand_dims(hazard, -1), np.concatenate(
-                (np.diag(1 - hazard[:-1]), np.zeros(len(hazard)-1)[np.newaxis]), axis=0)), axis=-1)
+        (np.diag(1 - hazard[:-1]), np.zeros(len(hazard) - 1)[np.newaxis]), axis=0)), axis=-1)
     b = np.zeros([len(hazard), 3, 3])
-    b[1:][:,0,0], b[1:][:,1,1], b[1:][:,2,2] = 1, 1, 1 # case when l_t > 0
-    b[0][0][-1], b[0][-1][0], b[0][1][np.array([0, 2])] = 1, 1, 1./2 # case when l_t = 1
+    b[1:][:, 0, 0], b[1:][:, 1, 1], b[1:][:, 2, 2] = 1, 1, 1  # case when l_t > 0
+    b[0][0][-1], b[0][-1][0], b[0][1][np.array([0, 2])] = 1, 1, 1. / 2  # case when l_t = 1
     # transition matrix l_{t-1}, b_{t-1}, l_t, b_t
-    t = np.log(np.swapaxes(l[:,:,np.newaxis,np.newaxis]
+    t = np.log(np.swapaxes(l[:, :, np.newaxis, np.newaxis]
                            * b[np.newaxis], 1, 2)).reshape(nb_typeblocks * nb_blocklengths, -1)
     priors = priors.reshape(-1, nb_typeblocks * nb_blocklengths)
     h = h.reshape(-1, nb_typeblocks * nb_blocklengths)
 
     for i_trial in range(nb_trials):
         s = stim_side[i_trial]
-        loglks = np.log(np.array([gamma*(s==-1) + (1-gamma)
-                                  * (s==1), 1./2, gamma*(s==1) + (1-gamma)*(s==-1)]))
+        loglks = np.log(np.array([gamma * (s == -1) + (1 - gamma)
+                                  * (s == 1), 1. / 2, gamma * (s == 1) + (1 - gamma) * (s == -1)]))
 
         # save priors
         if i_trial > 0:
             priors[i_trial] = logsumexp(h[i_trial - 1][:, np.newaxis] + t, axis=(0))
-        h[i_trial]          = priors[i_trial] + np.tile(loglks, ub)
+        h[i_trial] = priors[i_trial] + np.tile(loglks, ub)
 
     priors = priors - np.expand_dims(logsumexp(priors, axis=1), -1)
     h = h - np.expand_dims(logsumexp(h, axis=1), -1)
     priors = priors.reshape(-1, nb_blocklengths, nb_typeblocks)
     h = h.reshape(-1, nb_blocklengths, nb_typeblocks)
-    marginal_blocktype     =  np.exp(priors).sum(axis=1)
-    marginal_currentlength = np.exp(priors).sum(axis=2)    
-    pLeft_inferred = marginal_blocktype[:, 0] * (1 - gamma) + marginal_blocktype[:, 1] * 0.5 + marginal_blocktype[:, 2] * gamma
+    marginal_blocktype = np.exp(priors).sum(axis=1)
+    marginal_currentlength = np.exp(priors).sum(axis=2)
+    pLeft_inferred = marginal_blocktype[:, 0] * (1 - gamma) + marginal_blocktype[:, 1] * 0.5 + marginal_blocktype[:,
+                                                                                               2] * gamma
 
     return pLeft_inferred, marginal_blocktype, marginal_currentlength, priors, h
 
 
 def format_data(data):
-    stim_side = (np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1
-    stimuli  = np.zeros(len(stim_side))
-    stimuli[np.isnan(data['contrastLeft'])==False] = data['contrastLeft'][np.isnan(data['contrastLeft'])==False]
-    stimuli[np.isnan(data['contrastRight'])==False] = -data['contrastRight'][np.isnan(data['contrastRight'])==False]
+    stim_side = (np.isnan(data['contrastLeft']) == False) * 1 - (np.isnan(data['contrastRight']) == False) * 1
+    stimuli = np.zeros(len(stim_side))
+    stimuli[np.isnan(data['contrastLeft']) == False] = data['contrastLeft'][np.isnan(data['contrastLeft']) == False]
+    stimuli[np.isnan(data['contrastRight']) == False] = -data['contrastRight'][np.isnan(data['contrastRight']) == False]
     actions = data['choice']
     pLeft_oracle = data['probabilityLeft']
     return stim_side, stimuli, actions, pLeft_oracle
+
 
 def get_bwm_ins_alyx(one=None):
     import datetime
@@ -115,7 +129,7 @@ def get_bwm_ins_alyx(one=None):
     sess_id, i = np.unique(sess_id, return_index=True)
     time_stamps = []
     for item in ins:
-        s = (item['session_info']['start_time'].split(':')[0] + ':'  + item['session_info']['start_time'].split(':')[1])
+        s = (item['session_info']['start_time'].split(':')[0] + ':' + item['session_info']['start_time'].split(':')[1])
         time_stamps.append(datetime.datetime.strptime(s, '%Y-%m-%dT%H:%M').timestamp())
     return mice_names[i], np.array(ins)[i], np.array(ins_id)[i], sess_id, np.array(time_stamps)[i]
 
@@ -131,7 +145,7 @@ def load_session(sess_id, one=None):
                    'contrastLeft',
                    'contrastRight',
                    'goCue_times',
-                   'stimOn_times',]
+                   'stimOn_times', ]
 
     tmp = one.load_object(sess_id, 'trials')
     # Break container out into a dict with labels
@@ -139,8 +153,8 @@ def load_session(sess_id, one=None):
 
     return trialdata
 
-def exceedance_proba(alpha, Nsamp=1e6):
 
+def exceedance_proba(alpha, Nsamp=1e6):
     # Compute exceedance probabilities for a Dirichlet distribution
     # FORMAT xp = spm_dirichlet_exceedance(alpha,Nsamp)
     # 
@@ -150,7 +164,7 @@ def exceedance_proba(alpha, Nsamp=1e6):
     # 
     # Output:
     # xp        - exceedance probability
-    #__________________________________________________________________________
+    # __________________________________________________________________________
     #
     # This function computes exceedance probabilities, i.e. for any given model
     # k1, the probability that it is more likely than any other model k2.  
@@ -160,7 +174,7 @@ def exceedance_proba(alpha, Nsamp=1e6):
     # Refs:
     # Stephan KE, Penny WD, Daunizeau J, Moran RJ, Friston KJ
     # Bayesian Model Selection for Group Studies. NeuroImage (in press)
-    #__________________________________________________________________________
+    # __________________________________________________________________________
     # charles.findling
     # this is a translation from matlab to code. We tried to keep the structure
     # the closest possible to the original script
@@ -172,7 +186,7 @@ def exceedance_proba(alpha, Nsamp=1e6):
         # Sample from univariate gamma densities then normalise
         # (see Dirichlet entry in Wikipedia or Ferguson (1973) Ann. Stat. 1,
         # 209-230)
-        #----------------------------------------------------------------------
+        # ----------------------------------------------------------------------
 
         r = np.zeros(Nk)
         for k in range(Nk):
@@ -180,7 +194,7 @@ def exceedance_proba(alpha, Nsamp=1e6):
 
         sr = np.sum(r)
         for k in range(Nk):
-            r[k] = r[k]/sr
+            r[k] = r[k] / sr
 
         # Exceedance probabilities:
         # For any given model k1, compute the probability that it is more
@@ -188,7 +202,7 @@ def exceedance_proba(alpha, Nsamp=1e6):
         # ----------------------------------------------------------------------
         xp[np.argmax(r)] += 1
 
-    return xp/sum(xp)
+    return xp / sum(xp)
 
 
 def BMS_dirichlet(*args):
@@ -214,26 +228,26 @@ def BMS_dirichlet(*args):
     # REFERENCE:
     # Stephan KE, Penny WD, Daunizeau J, Moran RJ, Friston KJ (2009)
     # Bayesian Model Selection for Group Studies. NeuroImage 46:1004-1017
-    #__________________________________________________________________________
+    # __________________________________________________________________________
     # charles.findling
     # this is a translation from matlab to code. We tried to keep the structure
     # the closest possible to the original script
 
     if len(args) < 1:
-        return ValueError('Invalid number of arguments') 
+        return ValueError('Invalid number of arguments')
 
-    max_val    = np.finfo('float').max
-    lme        = args[0]
-    Ni, Nk     = lme.shape
-    c          = 1.
-    cc         = 1e-3
-    log_u      = np.zeros([Ni, Nk])
-    u          = np.zeros([Ni, Nk])
-    g          = np.zeros([Ni, Nk])
-    beta       = np.zeros(Nk)
+    max_val = np.finfo('float').max
+    lme = args[0]
+    Ni, Nk = lme.shape
+    c = 1.
+    cc = 1e-3
+    log_u = np.zeros([Ni, Nk])
+    u = np.zeros([Ni, Nk])
+    g = np.zeros([Ni, Nk])
+    beta = np.zeros(Nk)
     prev_alpha = np.zeros(Nk)
-    exp_r      = np.zeros(Nk)
-    xp         = np.zeros(Nk)
+    exp_r = np.zeros(Nk)
+    xp = np.zeros(Nk)
 
     if len(args) < 2:
         N_samp = int(1e6)
@@ -252,7 +266,6 @@ def BMS_dirichlet(*args):
         alpha0 = args[3]
     alpha = np.array(alpha0)
 
-
     # iterative VB estimation
     # ---------------------------------------------------------------------
 
@@ -263,26 +276,26 @@ def BMS_dirichlet(*args):
         for i in range(Ni):
             for k in range(Nk):
                 # integrate out prior probabilities of models (in log space)
-                log_u[i, k] = lme[i,k] + digamma(alpha[k]) - digamma(np.sum(alpha))
+                log_u[i, k] = lme[i, k] + digamma(alpha[k]) - digamma(np.sum(alpha))
 
             # prevent overflow
-            log_u[i, :] = log_u[i, :] - np.max(log_u[i,:])
+            log_u[i, :] = log_u[i, :] - np.max(log_u[i, :])
 
             # prevent numerical problems for badly scaled posteriors
             for k in range(Nk):
-                log_u[i,k] = np.sign(log_u[i,k]) * np.minimum(max_val, np.abs(log_u[i,k]))
+                log_u[i, k] = np.sign(log_u[i, k]) * np.minimum(max_val, np.abs(log_u[i, k]))
 
             # exponentiate (to get back to non-log representation)
-            u[i,:] = np.exp(log_u[i,:])
+            u[i, :] = np.exp(log_u[i, :])
 
             # normalisation: sum across all models for i-th subject
-            u_i    = np.sum(u[i,:])
-            g[i,:] = u[i,:]/u_i
+            u_i = np.sum(u[i, :])
+            g[i, :] = u[i, :] / u_i
 
         # expected number of subjects whose data we believe to have been 
         # generated by model k
         for k in range(Nk):
-            beta[k] = np.sum(g[:,k])
+            beta[k] = np.sum(g[:, k])
 
         # update alpha
         prev_alpha[:] = alpha
@@ -294,7 +307,7 @@ def BMS_dirichlet(*args):
 
     # Compute expectation of the posterior p(r|y)
     # --------------------------------------------------------------------------
-    exp_r[:] = alpha/np.sum(alpha) 
+    exp_r[:] = alpha / np.sum(alpha)
 
     # Compute exceedance probabilities p(r_i>r_j)
     # --------------------------------------------------------------------------
@@ -310,23 +323,27 @@ def BMS_dirichlet(*args):
 
     return [alpha, exp_r, xp]
 
+
 def estimate_Beta(theta, weights):
     loc = np.sum(theta * weights)
-    scale2 = np.sum(weights * ((theta - loc)**2))
-    a = ( (1 - loc)/scale2 - 1/loc ) * (loc**2)
+    scale2 = np.sum(weights * ((theta - loc) ** 2))
+    a = ((1 - loc) / scale2 - 1 / loc) * (loc ** 2)
     b = a * (1 / loc - 1)
     return np.maximum(a, 1), np.maximum(b, 1)
 
-def estimate_Gamma(theta, weights): # gamma for precision of normal = 1./var
+
+def estimate_Gamma(theta, weights):  # gamma for precision of normal = 1./var
     loc = np.sum(theta * weights)
-    scale2 = np.sum(weights * ((theta - loc)**2))
-    a = (loc**2)/scale2
-    b = loc/scale2
-    return a, 1/b
+    scale2 = np.sum(weights * ((theta - loc) ** 2))
+    a = (loc ** 2) / scale2
+    b = loc / scale2
+    return a, 1 / b
 
 
 import torch
 import gc
+
+
 def get_cuda_variable():
     for obj in gc.get_objects():
         try:
@@ -335,15 +352,19 @@ def get_cuda_variable():
         except:
             pass
 
+
 import subprocess
+
+
 def get_gpu_memory_map():
     result = subprocess.check_output(
         [
             'nvidia-smi', '--query-gpu=memory.used',
             '--format=csv,nounits,noheader'
         ])
-    
+
     return float(result)
+
 
 def make_transparent(plt):
     plt.gca().spines['right'].set_visible(False)
@@ -353,7 +374,7 @@ def make_transparent(plt):
     plt.xticks([], [])
     plt.yticks([], [])
 
+
 def clean_up(plt):
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
-

@@ -399,7 +399,7 @@ class Model():
             else:
                 raise ValueError('the model has not be trained')
 
-        if self.train_method=='MCMC': 
+        if self.train_method == 'MCMC':
             assert(parameter_type in ['MAP', 'posterior_mean', 'whole_posterior']), 'parameter_type must be MAP, posterior_mean or whole_posterior'
         if self.train_method!='MCMC':
             raise NotImplementedError
