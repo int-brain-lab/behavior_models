@@ -38,7 +38,8 @@ class expSmoothing_prevAction_SE(model.Model):
 
         values = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64) + 0.5
 
-        alpha = torch.unsqueeze(unsqueeze(alpha_stimulated) * (torch.unsqueeze(self.stimulated,1)==1) + unsqueeze(alpha_unstimulated) * (torch.unsqueeze(self.stimulated,1)==0), -1)
+        alpha = torch.unsqueeze(unsqueeze(alpha_stimulated) * (torch.unsqueeze(self.stimulated, 1) == 1) +
+                                unsqueeze(alpha_unstimulated) * (torch.unsqueeze(self.stimulated, 1) == 0), -1)
         zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
         lapses = unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0)
 
