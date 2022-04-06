@@ -531,15 +531,15 @@ class Model():
             formatted path where the results are saved
         '''        
         str_sessionuuids = ''
-        for k in range(len(l_sessionuuids_train)): str_sessionuuids += '_sid{}_{}'.format(k+1, l_sessionuuids_train[k])
+        for k in range(len(l_sessionuuids_train)): str_sessionuuids += '_{}'.format(l_sessionuuids_train[k])
         if l_sessionuuids_test is None:
             path = self.path_results_mouse + 'train{}.pkl'.format(str_sessionuuids)
             return path
         else:
             assert(trial_types is not None), 'trial_types can not be None if l_sessionuuids_test is not None'
             str_sessionuuids_test = ''
-            for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_sess{}_{}'.format(k+1, l_sessionuuids_test[k])
-            path = self.path_results_mouse + 'train_{}_train{}_test{}_trialtype_{}.pkl'.format(self.train_method, str_sessionuuids, str_sessionuuids_test, trial_types)
+            for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_{}'.format(l_sessionuuids_test[k])
+            path = self.path_results_mouse + 'train{}_test{}_trialtype_{}.pkl'.format(str_sessionuuids, str_sessionuuids_test, trial_types)
             return path
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side
