@@ -11,7 +11,7 @@ class expSmoothing_prevAction(model.Model):
     '''
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
-        name = 'expSmoothingPrevActions'
+        name = 'actKernel'
         nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
         std_RW = np.array([0.04, 0.02, 0.02, 0.01, 0.01])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)

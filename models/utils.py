@@ -94,10 +94,14 @@ def perform_inference(stim_side, tau=60, gamma=0.8, lb=20, ub=100):
 
 
 def format_data(data):
-    stim_side = (np.isnan(data['contrastLeft']) == False) * 1 - (np.isnan(data['contrastRight']) == False) * 1
-    stimuli = np.zeros(len(stim_side))
-    stimuli[np.isnan(data['contrastLeft']) == False] = data['contrastLeft'][np.isnan(data['contrastLeft']) == False]
-    stimuli[np.isnan(data['contrastRight']) == False] = -data['contrastRight'][np.isnan(data['contrastRight']) == False]
+    if 'feedbackType' in data.keys():
+        stim_side = data['choice'] * (data['feedbackType'] == 1) - data['choice'] * (data['feedbackType'] == -1)
+        stim_side_legacy = ((np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1)
+        if np.any((stim_side_legacy != stim_side) * (data['choice'] != 0)) and np.abs(stim_side_legacy).sum() != 0:
+            raise ValueError('there is a problem in the computation of the stim_side')
+    else:
+        stim_side = (np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1
+    stimuli = np.nan_to_num(data['contrastLeft']) - np.nan_to_num(data['contrastRight'])
     actions = data['choice']
     pLeft_oracle = data['probabilityLeft']
     return stim_side, stimuli, actions, pLeft_oracle
