@@ -272,7 +272,7 @@ class Model():
             self.remove(sessions_id)
 
         if loadpath is None:
-            loadpath = self.build_path(self.session_uuids[sessions_id])
+            loadpath = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
 
         if os.path.exists(loadpath):
             self.load(path=loadpath)
@@ -297,7 +297,7 @@ class Model():
             initial_point = utils.look_up(kwargs, 'initial_point', None)
             adaptive = utils.look_up(kwargs, 'adaptive', True)
             self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point, adaptive=adaptive)
-            path = self.build_path(self.session_uuids[sessions_id])
+            path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))
             print('results of inference SAVED')
         else:
@@ -319,14 +319,15 @@ class Model():
 
         if self.train_method=='MCMC':
             if path is None:
-                path = self.build_path(self.session_uuids[sessions_id])
+                path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             try:
                 [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
             except:
                 [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb')) # to take out on longer term <- necessary for version continuity
                 pass
         else:
-            return NotImplemented
+            return NotImplemented('This is lot of things to change. I wanted to add gradient descent as a learning'
+                                  'feature but didn\'t around to doing it. And MCMC seems to work well and fast enough')
 
     def remove(self, sessions_id):
         '''
@@ -337,7 +338,7 @@ class Model():
         Ouput:
             Removes the previously found results
         '''
-        path = self.build_path(self.session_uuids[sessions_id])
+        path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
         if os.path.exists(path):
             os.remove(path)
             print('results deleted')
@@ -393,7 +394,7 @@ class Model():
         if (not hasattr(self, 'params_list')):
             if sessions_id is None:
                 sessions_id = np.arange(len(self.session_uuids))
-            path = self.build_path(self.session_uuids[sessions_id])
+            path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             if os.path.exists(path):
                 self.load(sessions_id)
             else:
@@ -492,7 +493,8 @@ class Model():
         if trial_types in ['all', '0_contrasts'] and pLeft is not None:
             print('pLeft is obsolete for the trial_types specified!')
 
-        path = self.build_path(self.session_uuids[sessions_id], self.session_uuids[sessions_id_test], trial_types=trial_types)
+        path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id],
+                                self.session_uuids[sessions_id_test], trial_types=trial_types)
         if (remove_old or param is not None) and os.path.exists(path):
             os.remove(path)
         elif os.path.exists(path):
@@ -521,27 +523,6 @@ class Model():
             print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
         return loglkd, accuracy
 
-    def build_path(self, l_sessionuuids_train, l_sessionuuids_test=None, trial_types=None):
-        '''
-        Generates the path where the results will be saved
-        Params:
-            l_sessionuuids_train (array of int)
-            l_sessionuuids_test (array of int)
-        Ouput:
-            formatted path where the results are saved
-        '''        
-        str_sessionuuids = ''
-        for k in range(len(l_sessionuuids_train)): str_sessionuuids += '_{}'.format(l_sessionuuids_train[k])
-        if l_sessionuuids_test is None:
-            path = self.path_results_mouse + 'train{}.pkl'.format(str_sessionuuids)
-            return path
-        else:
-            assert(trial_types is not None), 'trial_types can not be None if l_sessionuuids_test is not None'
-            str_sessionuuids_test = ''
-            for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_{}'.format(l_sessionuuids_test[k])
-            path = self.path_results_mouse + 'train{}_test{}_trialtype_{}.pkl'.format(str_sessionuuids, str_sessionuuids_test, trial_types)
-            return path
-
     # act=self.actions; stim=self.stimuli; side=self.stim_side
     def get_parameters(self, sessions_id=None, parameter_type='all'):
         '''
@@ -554,7 +535,7 @@ class Model():
         if not hasattr(self, 'params_list'):
             if sessions_id is None:
                 sessions_id = np.arange(len(self.actions))
-            path = self.build_path(self.session_uuids[sessions_id])
+            path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             if os.path.exists(path):
                 self.load(sessions_id)
             else:

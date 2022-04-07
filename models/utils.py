@@ -8,6 +8,29 @@ import sobol_seq
 from scipy.stats import truncnorm, norm
 
 
+def build_path(path_results_mouse, l_sessionuuids_train, l_sessionuuids_test=None, trial_types=None):
+    '''
+    Generates the path where the results will be saved
+    Params:
+        l_sessionuuids_train (array of int)
+        l_sessionuuids_test (array of int)
+    Ouput:
+        formatted path where the results are saved
+    '''
+    str_sessionuuids = ''
+    for k in range(len(l_sessionuuids_train)): str_sessionuuids += '_{}'.format(l_sessionuuids_train[k])
+    if l_sessionuuids_test is None:
+        path = path_results_mouse + 'train{}.pkl'.format(str_sessionuuids)
+        return path
+    else:
+        assert (trial_types is not None), 'trial_types can not be None if l_sessionuuids_test is not None'
+        str_sessionuuids_test = ''
+        for k in range(len(l_sessionuuids_test)): str_sessionuuids_test += '_{}'.format(l_sessionuuids_test[k])
+        path = path_results_mouse + 'train{}_test{}_trialtype_{}.pkl'.format(str_sessionuuids, str_sessionuuids_test,
+                                                                             trial_types)
+        return path
+
+
 def format_input(stimuli_arr, actions_arr, stim_sides_arr, pLeft_arr=None):
     # get maximum number of trials across sessions
     max_len = np.array([len(stimuli_arr[k]) for k in range(len(stimuli_arr))]).max()

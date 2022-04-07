@@ -9,6 +9,7 @@ class expSmoothing_stimside(model.Model):
     '''
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
+    name = 'stimKernel'
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
         name = 'expSmoothingStimSides' + '_with_repBias' * repetition_bias
