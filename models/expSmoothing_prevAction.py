@@ -29,9 +29,9 @@ class expSmoothing_prevAction(model.Model):
         Output:
             loglikelihood (array of length nb_chains): loglikelihood for each chain
             values (array of shape [nb_sessions, nb_chains, nb_trials, 2]): prior for each chain and session
-        '''        
+        '''
         nb_chains = len(arr_params)
-        alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T      
+        alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
         loglikelihood = np.zeros(nb_chains)
         act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
@@ -44,9 +44,10 @@ class expSmoothing_prevAction(model.Model):
 
         for t in range(act.shape[-1]):
             if t > 0:
-                a_prev = torch.stack([act[:, t - 1]==-1, act[:, t - 1]==1]) * 1
-                values[act[:,t-1]!=0, :, t] = (1 - alpha) * values[act[:,t-1]!=0, :, t-1] + alpha * torch.unsqueeze(a_prev.T[act[:,t-1]!=0], 1)
-                values[act[:,t-1]==0, :, t] = values[act[:,t-1]==0, :, t-1]
+                a_prev = torch.stack([act[:, t - 1]==-1, act[:, t - 1] == 1]) * 1
+                values[act[:, t-1] != 0, :, t] = ((1 - alpha) * values[act[:, t - 1] != 0, :, t - 1] +
+                                                  alpha * torch.unsqueeze(a_prev.T[act[:, t - 1] != 0], 1))
+                values[act[:, t-1] == 0, :, t] = values[act[:, t-1] == 0, :, t - 1]
 
         assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-6)
 
@@ -89,7 +90,8 @@ class expSmoothing_prevAction(model.Model):
         alpha = torch.unsqueeze(unsqueeze(alpha), -1)
         zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
         lapses = torch.unsqueeze(unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0), -1)
-        Rho = torch.unsqueeze(torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(0), torch.tensor(1e-7)), torch.tensor(1 - 1e-7)), -1) # pRight likelihood
+        Rho = torch.unsqueeze(torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)),
+                                                          torch.tensor(1e-7)), torch.tensor(1 - 1e-7)), -1) # pRight likelihood
 
         for t in range(stim.shape[-1]):
             if t > 0:
@@ -104,7 +106,7 @@ class expSmoothing_prevAction(model.Model):
 
         correct = (act_sim == side[:, np.newaxis, :, np.newaxis])
         correct = np.array(correct, dtype=np.float)
-        correct[valid_arr==False] = np.nan
+        correct[valid_arr == False] = np.nan
         perf = np.nanmean(correct, axis=(0, -2, -1))
 
         if only_perf:

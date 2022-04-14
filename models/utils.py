@@ -2,6 +2,7 @@ from one.api import ONE
 import numpy as np
 from scipy.special import digamma, betainc, logsumexp
 import pickle
+import pandas as pd
 import os, sys
 from itertools import accumulate
 import sobol_seq
@@ -125,7 +126,10 @@ def format_data(data):
     else:
         stim_side = (np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1
     stimuli = np.nan_to_num(data['contrastLeft']) - np.nan_to_num(data['contrastRight'])
-    actions = data['choice']
+    if 'choice' in data.keys():
+        actions = data['choice']
+    else:
+        actions = pd.Series(dtype='float64').reindex_like(stim_side)
     pLeft_oracle = data['probabilityLeft']
     return stim_side, stimuli, actions, pLeft_oracle
 
