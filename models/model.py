@@ -5,6 +5,7 @@ import os, pickle
 from tqdm import tqdm
 from scipy.special import logsumexp
 import warnings, torch
+from pathlib import Path
 
 class Model():
     '''
@@ -44,10 +45,10 @@ class Model():
         self.lb_params, self.ub_params, self.nb_params = lb_params, ub_params, nb_params
         self.mouse_name = mouse_name
         if not os.path.exists(self.path_to_results):
-            os.mkdir(self.path_to_results)
+            Path(self.path_to_results).mkdir(parents=True, exist_ok=True)
         self.path_results_mouse = self.path_to_results + self.mouse_name +'/model_{}_'.format(self.name)
         if not os.path.exists(self.path_to_results + self.mouse_name):
-            os.mkdir(self.path_to_results + self.mouse_name)
+            Path(self.path_to_results + self.mouse_name).mkdir(parents=True, exist_ok=True)
         self.std_RW = std_RW
 
         self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
