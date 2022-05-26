@@ -1,12 +1,6 @@
-from one.api import ONE
 import numpy as np
 from scipy.special import digamma, betainc, logsumexp
-import pickle
 import pandas as pd
-import os, sys
-from itertools import accumulate
-import sobol_seq
-from scipy.stats import truncnorm, norm
 
 
 def build_path(path_results_mouse, l_sessionuuids_train, l_sessionuuids_test=None, trial_types=None):
@@ -54,19 +48,6 @@ def look_up(dic, key, val):
         return dic[key]
     else:
         return val
-
-
-def generate_stim():
-    one = ONE()
-    all_stimuli, all_dates = {}, {}
-    mice_names, ins, ins_id, sess_id, time_stamps = get_bwm_ins_alyx(one)
-    for idx in range(len(sess_id)):
-        # data = load_session(sess_id[idx])
-        #  stim_side, stimuli, actions, pLeft_oracle = format_data(data)
-        #   all_stimuli[sess_id[idx]] = stim_side
-        all_dates[sess_id[idx]] = time_stamps[sess_id == sess_id[idx]]
-    # pickle.dump(all_stimuli, open('data/stimuli.pkl', 'wb'))
-    pickle.dump(all_dates, open('data/all_dates.pkl', 'wb'))
 
 
 def trunc_exp(n, tau, lb, ub):
@@ -124,17 +105,17 @@ def format_data(data):
         if np.any((stim_side != stim_side_legacy) * (data['choice'] != 0)) and np.abs(stim_side).sum() != 0:
             raise ValueError('there is a problem in the computation of the stim_side')
     else:
-        stim_side = (np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1
+        stim_side = (np.isnan(data['contrastLeft']) == False) * 1 - (np.isnan(data['contrastRight']) == False) * 1
     stimuli = np.nan_to_num(data['contrastLeft']) - np.nan_to_num(data['contrastRight'])
     if 'choice' in data.keys():
         actions = data['choice']
     else:
         actions = pd.Series(dtype='float64').reindex_like(stim_side)
     pLeft_oracle = data['probabilityLeft']
-    return stim_side, stimuli, actions, pLeft_oracle
+    return np.array(stim_side), np.array(stimuli), np.array(actions), np.array(pLeft_oracle)
 
 
-def get_bwm_ins_alyx(one=None):
+def get_bwm_ins_alyx(one):
     import datetime
     """
     Return insertions that match criteria :
@@ -147,8 +128,6 @@ def get_bwm_ins_alyx(one=None):
     ins_id: list of insertions eids
     sess_id: list of (unique) sessions eids
     """
-    if one is None:
-        one = ONE()
     ins = one.alyx.rest('insertions', 'list',
                         django='session__project__name__icontains,ibl_neuropixel_brainwide_01,'
                                'session__qc__lt,50,'
@@ -165,9 +144,7 @@ def get_bwm_ins_alyx(one=None):
     return mice_names[i], np.array(ins)[i], np.array(ins_id)[i], sess_id, np.array(time_stamps)[i]
 
 
-def load_session(sess_id, one=None):
-    if one is None:
-        one = ONE()
+def load_session(sess_id, one):
 
     trialstypes = ['choice',
                    'probabilityLeft',

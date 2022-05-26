@@ -41,7 +41,7 @@ class Model():
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
         assert(len(np.unique(self.session_uuids)) == len(self.session_uuids)), 'there is a problem in the session formatting. Contact Charles Findling'
 
-        self.path_to_results = path_to_results
+        self.path_to_results = str(path_to_results) + '/'  # Posix is better but this is incompatible with an older version of the code
         self.lb_params, self.ub_params, self.nb_params = lb_params, ub_params, nb_params
         self.mouse_name = mouse_name
         if not os.path.exists(self.path_to_results):
@@ -52,7 +52,7 @@ class Model():
         self.std_RW = std_RW
 
         self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
-        if (self.actions is not None):
+        if self.actions is not None:
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
@@ -479,7 +479,7 @@ class Model():
 
     def score(self, sessions_id_test, sessions_id, parameter_type='whole_posterior', remove_old=False, param=None, trial_types='all', pLeft=None):
         '''
-        Scores the model on session_id. NB: to implement cross validation, do not train and test on the same sessions
+        Scores the model on eid. NB: to implement cross validation, do not train and test on the same sessions
         This methods allows for refined scoring when trial_types is specified.
         Params:
             sessions_id (array of int): gives the sessions used for the training (for instance, if you have 4 sessions,

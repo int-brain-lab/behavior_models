@@ -1,4 +1,4 @@
-from models import model, utils
+from models import model
 import torch
 import numpy as np
 from torch.distributions.normal import Normal
