@@ -98,7 +98,7 @@ def perform_inference(stim_side, tau=60, gamma=0.8, lb=20, ub=100):
     return pLeft_inferred, marginal_blocktype, marginal_currentlength, priors, h
 
 
-def :format_data(data):
+def format_data(data):
     if 'feedbackType' in data.keys():
         stim_side = data['choice'] * (data['feedbackType'] == 1) - data['choice'] * (data['feedbackType'] == -1)
         #stim_side = ((np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1)
