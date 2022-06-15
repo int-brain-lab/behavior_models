@@ -68,7 +68,7 @@ class expSmoothing_prevAction(model.Model):
             return logp_ch, values[:, :, :, 1], prediction_error
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
-    def simulate(self, arr_params, stim, side, valid, nb_simul=50, only_perf=True):
+    def simulate(self, arr_params, stim, side, valid, nb_simul=50, only_perf=True, return_prior=False):
         '''
         custom
         '''
@@ -111,6 +111,8 @@ class expSmoothing_prevAction(model.Model):
 
         if only_perf:
             return perf
+        elif return_prior:
+            return act_sim, stim, side, values[:, :, :, :, 1]
         else:
             return act_sim, stim, side
 

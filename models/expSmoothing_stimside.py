@@ -12,7 +12,7 @@ class expSmoothing_stimside(model.Model):
     name = 'stimKernel'
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
-        name = 'expSmoothingStimSides' + '_with_repBias' * repetition_bias
+        name = 'stimKernel' + '_with_repBias' * repetition_bias
         nb_params, lb_params, ub_params = 5, np.array([0, 0, 0, 0, 0]), np.array([1, 1, 1, .5, .5])
         std_RW = np.array([0.04, 0.02, 0.02, 0.01, 0.01])
         self.repetition_bias = repetition_bias
