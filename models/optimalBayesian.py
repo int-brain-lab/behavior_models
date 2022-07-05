@@ -12,13 +12,13 @@ class optimal_Bayesian(model.Model):
 
     def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
         name = 'optimal_bayesian' + '_with_repBias' * repetition_bias
-        nb_params, lb_params, ub_params = 4, np.array([0, 0, 0, 0]), np.array([1, 1, .5, .5])
-        std_RW = np.array([0.04, 0.04, 0.01, 0.01])
+        nb_params, lb_params, ub_params = 3, np.array([0, 0, 0]), np.array([1, .5, .5])
+        std_RW = np.array([0.05, 0.02, 0.02])
         self.repetition_bias = repetition_bias
         if repetition_bias:
             nb_params += 1
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
-            std_RW = np.array([0.02, 0.02, 0.01, 0.01, 0.01])
+            std_RW = np.array([0.05, 0.01, 0.01, 0.02])
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
         self.nb_blocklengths, self.nb_typeblocks = 100, 3
 
@@ -37,9 +37,9 @@ class optimal_Bayesian(model.Model):
         '''        
         nb_chains = len(arr_params)
         if not self.repetition_bias:
-            zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+            zeta, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
         else:
-            zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+            zeta, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
         act, stim, side = torch.tensor(act, device=self.device, dtype=torch.float32), torch.tensor(stim, device=self.device, dtype=torch.float32), torch.tensor(side, device=self.device, dtype=torch.float32)
         nb_sessions = len(act)
         lb, tau, ub, gamma = 20, 60, 100, 0.8
@@ -49,8 +49,12 @@ class optimal_Bayesian(model.Model):
         alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
         h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks * self.nb_blocklengths], device=self.device, dtype=torch.float32)
 
-        zetas = unsqueeze(zeta_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta_neg) * (torch.unsqueeze(side,1) <= 0)
-        lapses = unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) + unsqueeze(lapse_neg) * (torch.unsqueeze(side,1) <= 0)
+        zetas = unsqueeze(zeta) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta) * (torch.unsqueeze(side,1) <= 0)
+        lapses = (
+            unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
+            unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
+            0.5 * (unsqueeze(lapse_neg) + unsqueeze(lapse_pos)) * (torch.unsqueeze(side, 1) == 0)
+        )
 
         # build transition matrix
         b = torch.zeros([self.nb_blocklengths, 3, 3], device=self.device, dtype=torch.float32)
@@ -72,10 +76,16 @@ class optimal_Bayesian(model.Model):
 
         for i_trial in range(act.shape[-1]):
             # save priors
-            if i_trial > 0:
-                alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
-            h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(1, 1, self.nb_blocklengths)
-            h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
+            if i_trial >= 90:  # python indexing starts at 0
+                if i_trial > 90:
+                    alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
+                else:
+                    alpha[:, :, i_trial, 0, 0] = 0.5
+                    alpha[:, :, i_trial, 0, -1] = 0.5
+                h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(1, 1, self.nb_blocklengths)
+                h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
+            else:
+                alpha[:, :, i_trial, 0, 1] = 1
 
         predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
         Pis = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
