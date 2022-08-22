@@ -39,7 +39,7 @@ class expSmoothing_prevAction(model.Model):
         values = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64) + 0.5
 
         alpha = unsqueeze(alpha)
-        zetas = unsqueeze(zeta) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta) * (torch.unsqueeze(side,1) <= 0)
+        zetas = unsqueeze(zeta)
         lapses = (
             unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
             unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
@@ -55,7 +55,12 @@ class expSmoothing_prevAction(model.Model):
 
         assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-6)
 
-        Rho = torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)), torch.tensor(1e-7)), torch.tensor(1 - 1e-7)) # pRight likelihood
+        Rho = torch.minimum(
+            torch.maximum(
+                Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)), torch.tensor(1e-7)
+            ),
+            torch.tensor(1 - 1e-7)
+        ) # pRight likelihood
         pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
