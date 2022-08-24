@@ -7,9 +7,11 @@ from behavior_models.models import utils as but
 import itertools
 from models import expSmoothing_stimside, expSmoothing_prevAction, optimalBayesian
 
-list_of_models = [expSmoothing_stimside.expSmoothing_stimside,
-                  expSmoothing_prevAction.expSmoothing_prevAction]
-                  #optimalBayesian.optimalBayesian]
+list_of_models = [
+                optimalBayesian.optimal_Bayesian,
+                expSmoothing_stimside.expSmoothing_stimside,
+                expSmoothing_prevAction.expSmoothing_prevAction
+]
 
 # import most recent cached data
 bwmdf, _ = load_metadata(CACHE_PATH.joinpath('*_%s_metadata.pkl' % 'ephys').as_posix())
@@ -21,7 +23,7 @@ for i_subj, subj in tqdm(enumerate(uniq_subject)):
     subdf = bwmdf['dataset_filenames'][bwmdf['dataset_filenames'].subject == subj]
     stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
     for index, row in subdf.iterrows():
-        out = pickle.load(open(row.reg_file, 'rb'))
+        out = pickle.load(open(CACHE_PATH.as_posix() + row.reg_file.as_posix().split('cache')[-1], 'rb'))
         if row.eid not in session_uuids:
             data = {k: out['trials_df'][k] for k in ['choice', 'probabilityLeft', 'feedbackType', 'contrastLeft', 'contrastRight', ]}
             stim_side, stimuli, actions, pLeft_oracle = but.format_data(data)
