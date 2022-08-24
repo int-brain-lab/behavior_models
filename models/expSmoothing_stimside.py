@@ -2,6 +2,7 @@ from models import model
 import torch
 import numpy as np
 from torch.distributions.normal import Normal
+from models import utils as mut
 
 unsqueeze = lambda x : torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
@@ -40,14 +41,12 @@ class expSmoothing_stimside(model.Model):
             alpha, zeta, lapse_pos, lapse_neg = torch.tensor(arr_params).T
         else:
             alpha, zeta, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params).T
-        loglikelihood = np.zeros(nb_chains)
         act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
         
         values = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64) + 0.5
 
-        alpha = torch.unsqueeze(unsqueeze(alpha), -1)
-        zetas = unsqueeze(zeta) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta) * (torch.unsqueeze(side,1) <= 0)
+        alpha = unsqueeze(alpha)
         lapses = (
             unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
             unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
@@ -55,7 +54,6 @@ class expSmoothing_stimside(model.Model):
         )
 
         for t in range(act.shape[-1]):
-            s = side[:, t]
             if t > 0:
                 s_prev = torch.stack([side[:, t - 1] == -1, side[:, t - 1] == 1]) * 1
                 values[act[:,t-1] !=0, :, t] = (1 - alpha) * values[act[:,t-1] != 0, :, t-1] + alpha * torch.unsqueeze(s_prev.T[act[:,t-1] != 0], 1)
@@ -63,8 +61,10 @@ class expSmoothing_stimside(model.Model):
 
                 assert(torch.max(torch.abs(torch.sum(values[:, :, :t+1], axis=-1) - 1)) < 1e-6)
 
-        Rho = torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)), torch.tensor(1e-7)), torch.tensor(1 - 1e-7)) # pRight likelihood
-        pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
+        values = torch.clamp(values, min=1e-8, max=1-1e-8)
+        pLeft = mut.combine_lkd_prior(stim, zeta, values[:, :, :, 1], lapses)
+        pRight = mut.combine_lkd_prior(-stim, zeta, values[:, :, :, 0], lapses)
+        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         unsqueezed_lapses = torch.unsqueeze(lapses, 0)

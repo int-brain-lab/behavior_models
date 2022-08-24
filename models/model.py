@@ -369,7 +369,7 @@ class Model():
         '''        
         return self._compute_signal(signal=signal, act=act, stim=stim, side=side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types='all', pLeft=None, verbose=verbose)
 
-    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft, verbose):
+    def _compute_signal(self, signal, act, stim, side, sessions_id, parameter_type, trial_types, pLeft, verbose=True):
         '''
         internal function
         '''

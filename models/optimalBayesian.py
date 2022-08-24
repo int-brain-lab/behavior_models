@@ -2,6 +2,7 @@ from models import model, utils
 import torch
 import numpy as np
 from torch.distributions.normal import Normal
+from models import utils as mut
 
 unsqueeze = lambda x : torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
@@ -49,7 +50,6 @@ class optimal_Bayesian(model.Model):
         alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
         h = torch.zeros([nb_sessions, nb_chains, self.nb_typeblocks * self.nb_blocklengths], device=self.device, dtype=torch.float32)
 
-        zetas = unsqueeze(zeta) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta) * (torch.unsqueeze(side,1) <= 0)
         lapses = (
             unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
             unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
@@ -69,7 +69,6 @@ class optimal_Bayesian(model.Model):
         transition = 1e-12 + torch.transpose(l[:,:,np.newaxis,np.newaxis] * b[np.newaxis], 1, 2).reshape(self.nb_typeblocks * self.nb_blocklengths, -1)
 
         # likelihood
-        Rhos = Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0))
         ones = torch.ones((nb_sessions, act.shape[-1]), device=self.device, dtype=torch.float32)
         lks = torch.stack([gamma*(side==-1) + (1-gamma) * (side==1), ones * 1./2, gamma*(side==1) + (1-gamma)*(side==-1)]).T
         to_update = torch.unsqueeze(torch.unsqueeze(act!=0, -1), -1) * 1
@@ -89,7 +88,11 @@ class optimal_Bayesian(model.Model):
 
         predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
         Pis = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
-        pRight, pLeft = Pis * Rhos, (1 - Pis) * (1 - Rhos)
+
+        values = torch.clamp(Pis, min=1e-8, max=1-1e-8)
+        pLeft = mut.combine_lkd_prior(stim, zeta,  (1 - Pis) , lapses)
+        pRight = mut.combine_lkd_prior(-stim, zeta, Pis, lapses)
+        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         unsqueezed_lapses = torch.unsqueeze(lapses, 0)

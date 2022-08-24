@@ -1,54 +1,59 @@
-# load ONE and mice
-from models.biasedBayesian import biased_Bayesian
-from models.biasedApproxBayesian import biased_ApproxBayesian as baisedApproxBay
-from models.optimalBayesian import optimal_Bayesian as optBay
-from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
-from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
+from braindelphi.params import CACHE_PATH
+from braindelphi.decoding.functions.utils import load_metadata
+import pickle
+from tqdm import tqdm
 import numpy as np
-from models import utils
-from oneibl.one import ONE
-one = ONE()
-mice_names, ins, ins_id, sess_id, _ = utils.get_bwm_ins_alyx(one)
-stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
+from behavior_models.models import utils as but
+import itertools
+from models import expSmoothing_stimside, expSmoothing_prevAction, optimalBayesian
 
-# select particular mice
-mouse_name = 'KS022'
-for i in range(len(sess_id)):
-    if mice_names[i] == mouse_name:  # take only sessions of first mice
-        data = utils.load_session(sess_id[i])
-        if data['choice'] is not None and data['probabilityLeft'][0] == 0.5:
-            stim_side, stimuli, actions, pLeft_oracle = utils.format_data(data)
+list_of_models = [expSmoothing_stimside.expSmoothing_stimside,
+                  expSmoothing_prevAction.expSmoothing_prevAction]
+                  #optimalBayesian.optimalBayesian]
+
+# import most recent cached data
+bwmdf, _ = load_metadata(CACHE_PATH.joinpath('*_%s_metadata.pkl' % 'ephys').as_posix())
+
+uniq_subject = bwmdf['dataset_filenames'].subject.unique()
+loglkds = np.zeros([uniq_subject.size, len(list_of_models)])
+accuracies = np.zeros([uniq_subject.size, len(list_of_models)])
+for i_subj, subj in tqdm(enumerate(uniq_subject)):
+    subdf = bwmdf['dataset_filenames'][bwmdf['dataset_filenames'].subject == subj]
+    stimuli_arr, actions_arr, stim_sides_arr, session_uuids = [], [], [], []
+    for index, row in subdf.iterrows():
+        out = pickle.load(open(row.reg_file, 'rb'))
+        if row.eid not in session_uuids:
+            data = {k: out['trials_df'][k] for k in ['choice', 'probabilityLeft', 'feedbackType', 'contrastLeft', 'contrastRight', ]}
+            stim_side, stimuli, actions, pLeft_oracle = but.format_data(data)
             stimuli_arr.append(stimuli)
             actions_arr.append(actions)
             stim_sides_arr.append(stim_side)
-            session_uuids.append(sess_id[i])
+            session_uuids.append(row.eid)
+    # format data
+    stimuli, actions, stim_side = but.format_input(stimuli_arr, actions_arr, stim_sides_arr)
+    session_uuids = np.array(session_uuids)
+    nb_sessions = len(actions)
 
-# format data
-stimuli, actions, stim_side = utils.format_input(
-    stimuli_arr, actions_arr, stim_sides_arr)
-session_uuids = np.array(session_uuids)
+    if nb_sessions >= 2:
+        print('found {} sessions'.format(nb_sessions))
+        training_sessions = np.array(list(itertools.combinations(np.arange(nb_sessions), nb_sessions - 1)))
+        testing_sessions = np.stack([np.delete(np.arange(nb_sessions), training_sessions[k]) for k in range(len(training_sessions))])
+        sel_p = np.array([0.4999]) # [0.33, 0.66, 1.]) #
+        p_sess = np.arange(1, len(training_sessions) + 1)/len(training_sessions)
+        sel_sess = np.array([np.sum(p_sess <= sel_p[k]) for k in range(len(sel_p))])
+        training_sessions = training_sessions[sel_sess]
+        testing_sessions  = testing_sessions[sel_sess]
 
-# import models
-from models.expSmoothing_stimside import expSmoothing_stimside as exp_stimside
-from models.expSmoothing_prevAction import expSmoothing_prevAction as exp_prevAction
-from models.optimalBayesian import optimal_Bayesian as optBay
+        # import models
+        if len(training_sessions) > 0:
+            print('established {} training sessions'.format(len(training_sessions)))
 
-'''
-If you are interested in fitting (and the prior) of the mice behavior
-'''
+            for i_model_type, model_type in enumerate(list_of_models):
+                model = model_type('./results/', session_uuids, subj, actions, stimuli, stim_side)
+                for idx_perm in range(len(training_sessions)):
+                    model.load_or_train(sessions_id=training_sessions[idx_perm], remove_old=False, adaptive=True)
+                    loglkds[i_subj, i_model_type], accuracies[i_subj, i_model_type] = model.score(sessions_id_test=testing_sessions[idx_perm],
+                                                                                                  sessions_id=training_sessions[idx_perm], remove_old=True)
 
-model = exp_prevAction('./results/inference/', session_uuids,
-                       mouse_name, actions, stimuli, stim_side)
-
-model.load_or_train(remove_old=False)
-param = model.get_parameters()  # if you want the parameters
-# compute signals of interest
-signals = model.compute_signal(
-    signal=['prior', 'prediction_error', 'score'], verbose=False)
-
-'''
-if you are interested in pseudo-sessions. NB the model has to previously be trained
-It will return an Error if the model has not been trained
-'''
-model = exp_prevAction('./results/inference/', session_uuids, mouse_name, actions=None, stimuli=None, stim_side=None)
-signals = model.compute_signal(signal=['prior', 'prediction_error', 'score'], act=actions, stim=stimuli, side=stim_side)
+loglkds = loglkds[np.all(loglkds != 0, axis=-1)]
+accuracies = accuracies[np.all(accuracies != 0, axis=-1)]

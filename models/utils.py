@@ -2,6 +2,14 @@ import numpy as np
 from scipy.special import digamma, betainc, logsumexp
 import pandas as pd
 
+from torch.distributions.normal import Normal
+def combine_lkd_prior(c_t, zeta, pi_t, epsilon_t, sigma=0.49):
+    sigma_star = torch.sqrt(1 / (sigma ** -2 + zeta ** -2))[None, :, None]
+    prior_contrib = Normal(loc=0, scale=1).icdf(1 - pi_t)
+    combined = c_t[:, None] / zeta[None, :, None] - zeta[None, :, None] / sigma_star * prior_contrib
+    out = Normal(loc=0, scale=1).cdf(combined) * (1 - epsilon_t) + epsilon_t / 2.
+    return torch.clamp(out, min=1e-7, max=1 - 1e-7)
+
 
 def build_path(path_results_mouse, l_sessionuuids_train, l_sessionuuids_test=None, trial_types=None):
     '''
@@ -386,3 +394,13 @@ def make_transparent(plt):
 def clean_up(plt):
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
+
+
+if __name__ == '__main__':
+    from models import utils as mut
+    c_t = torch.tensor([[-0.1250]])
+    zeta_ = torch.tensor([0.0001], dtype=torch.float64)
+    pLeft = mut.combine_lkd_prior(c_t=c_t, zeta=zeta_, pi_t=torch.tensor([[[1. - 1e-16]]]), epsilon_t=0)
+    pRight = mut.combine_lkd_prior(c_t=-c_t, zeta=zeta_, pi_t=torch.tensor([[[1e-16]]], dtype=torch.float64), epsilon_t=0)
+
+    Normal(loc=0, scale=1).icdf(1 - torch.tensor([[[1. - 1e-16]]]))

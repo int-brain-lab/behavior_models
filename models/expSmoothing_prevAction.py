@@ -2,6 +2,7 @@ from models import model
 import torch
 import numpy as np
 from torch.distributions.normal import Normal
+from models import utils as mut
 
 unsqueeze = lambda x : torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
@@ -39,7 +40,6 @@ class expSmoothing_prevAction(model.Model):
         values = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64) + 0.5
 
         alpha = unsqueeze(alpha)
-        zetas = unsqueeze(zeta)
         lapses = (
             unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
             unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
@@ -55,20 +55,17 @@ class expSmoothing_prevAction(model.Model):
 
         assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-6)
 
-        Rho = torch.minimum(
-            torch.maximum(
-                Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)), torch.tensor(1e-7)
-            ),
-            torch.tensor(1 - 1e-7)
-        ) # pRight likelihood
-        pRight, pLeft = values[:, :, :, 0] * Rho, values[:, :, :, 1] * (1 - Rho)
+        values = torch.clamp(values, min=1e-8, max=1 - 1e-8)
+        pLeft = mut.combine_lkd_prior(stim, zeta, values[:, :, :, 1], lapses)
+        pRight = mut.combine_lkd_prior(-stim, zeta, values[:, :, :, 0], lapses)
+        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         belief = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1)
         correct = (act == side) * 1
         prediction_error = (torch.unsqueeze(correct, 1) - belief)
 
-        pActions = pActions * (1 - lapses) + lapses / 2.
+        pActions = pActions * (1 - torch.unsqueeze(lapses, 0)) + torch.unsqueeze(lapses, 0) / 2.
 
         p_ch = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1) + 1 * (torch.unsqueeze(act, 1) == 0) # discard trials where agent did not answer
         p_ch = torch.minimum(torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8))
