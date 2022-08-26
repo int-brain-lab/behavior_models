@@ -68,12 +68,12 @@ class expSmoothing_prevAction(model.Model):
                                                   alpha * torch.unsqueeze(a_prev.T[act[:, t - 1] != 0], 1))
                 values[act[:, t-1] == 0, :, t] = values[act[:, t-1] == 0, :, t - 1]
 
-        assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-5)
+        assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-4)
 
         values = torch.clamp(values, min=1e-8, max=1 - 1e-8)
         pLeft = mut.combine_lkd_prior(stim, zetas, values[:, :, :, 1], lapses)
         pRight = mut.combine_lkd_prior(-stim, zetas, values[:, :, :, 0], lapses)
-        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
+        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-3)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         belief = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (torch.unsqueeze(act, 1) == 1)

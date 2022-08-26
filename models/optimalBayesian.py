@@ -111,7 +111,7 @@ class optimal_Bayesian(model.Model):
         values = torch.clamp(Pis, min=1e-8, max=1-1e-8)
         pLeft = mut.combine_lkd_prior(stim, zetas,  (1 - Pis) , lapses)
         pRight = mut.combine_lkd_prior(-stim, zetas, Pis, lapses)
-        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
+        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-3)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         unsqueezed_lapses = torch.unsqueeze(lapses, 0)
