@@ -11,15 +11,18 @@ class optimal_Bayesian(model.Model):
         Model where the prior is based on an exponential estimation of the previous stimulus side
     '''
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, repetition_bias=False):
-        name = 'optimal_bayesian' + '_with_repBias' * repetition_bias
-        nb_params, lb_params, ub_params = 3, np.array([0, 0, 0]), np.array([1, .5, .5])
-        std_RW = np.array([0.05, 0.02, 0.02])
+    name = 'optBay'
+
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, single_zeta, repetition_bias=False):
+        name = 'optimal_bayesian' + '_with_repBias' * repetition_bias + '_single_zeta' * single_zeta
+        self.single_zeta = single_zeta
+        nb_params = 3 + (not single_zeta) * 1 + repetition_bias * 1
+        lb_params, ub_params = np.zeros(nb_params), np.concatenate((np.ones(nb_params - 2), np.array([.5, .5])))
+        std_RW = np.concatenate((np.ones(1 + (not single_zeta) * 1) * 0.04, np.array([0.02, 0.02])))
         self.repetition_bias = repetition_bias
         if repetition_bias:
-            nb_params += 1
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, .5)
-            std_RW = np.array([0.05, 0.01, 0.01, 0.02])
+            std_RW = np.append(std_RW, 0.01)
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
         self.nb_blocklengths, self.nb_typeblocks = 100, 3
 
@@ -37,10 +40,15 @@ class optimal_Bayesian(model.Model):
             prior (array of shape [nb_sessions, nb_chains, nb_trials]): prior for each chain and session
         '''        
         nb_chains = len(arr_params)
-        if not self.repetition_bias:
+        if not self.repetition_bias and self.single_zeta:
             zeta, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
-        else:
+        elif self.single_zeta:
             zeta, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+        elif not self.repetition_bias:
+            zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device, dtype=torch.float32).T
+        else:
+            zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device,
+                                                                              dtype=torch.float32).T
         act, stim, side = torch.tensor(act, device=self.device, dtype=torch.float32), torch.tensor(stim, device=self.device, dtype=torch.float32), torch.tensor(side, device=self.device, dtype=torch.float32)
         nb_sessions = len(act)
         lb, tau, ub, gamma = 20, 60, 100, 0.8
@@ -54,6 +62,15 @@ class optimal_Bayesian(model.Model):
             unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
             unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
             0.5 * (unsqueeze(lapse_neg) + unsqueeze(lapse_pos)) * (torch.unsqueeze(side, 1) == 0)
+        )
+
+        if self.single_zeta:
+            zeta_pos, zeta_neg = zeta, zeta
+
+        zetas = (
+                unsqueeze(zeta_pos) * (torch.unsqueeze(side, 1) > 0) +
+                unsqueeze(zeta_neg) * (torch.unsqueeze(side, 1) < 0) +
+                0.5 * (unsqueeze(zeta_pos) + unsqueeze(zeta_neg)) * (torch.unsqueeze(side, 1) == 0)
         )
 
         # build transition matrix
@@ -92,8 +109,8 @@ class optimal_Bayesian(model.Model):
         Pis = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
 
         values = torch.clamp(Pis, min=1e-8, max=1-1e-8)
-        pLeft = mut.combine_lkd_prior(stim, zeta,  (1 - Pis) , lapses)
-        pRight = mut.combine_lkd_prior(-stim, zeta, Pis, lapses)
+        pLeft = mut.combine_lkd_prior(stim, zetas,  (1 - Pis) , lapses)
+        pRight = mut.combine_lkd_prior(-stim, zetas, Pis, lapses)
         assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 

@@ -12,10 +12,12 @@ class expSmoothing_prevAction(model.Model):
     '''
     name = 'actKernel'
 
-    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side):
-        name = 'actKernel'
-        nb_params, lb_params, ub_params = 4, np.array([0, 0, 0, 0]), np.array([1, 1, .5, .5])
-        std_RW = np.array([0.05, 0.04, 0.02, 0.02])
+    def __init__(self, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, single_zeta):
+        name = 'actKernel' + '_single_zeta' * single_zeta
+        self.single_zeta = single_zeta
+        nb_params = 4 + (not single_zeta) * 1
+        lb_params, ub_params = np.zeros(nb_params), np.concatenate((np.ones(nb_params - 2), np.array([.5, .5])))
+        std_RW = np.concatenate((np.array([0.05]), np.ones(1 + (not single_zeta) * 1) * 0.04, np.array([0.02, 0.02])))
         super().__init__(name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW)
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
@@ -32,7 +34,11 @@ class expSmoothing_prevAction(model.Model):
             values (array of shape [nb_sessions, nb_chains, nb_trials, 2]): prior for each chain and session
         '''
         nb_chains = len(arr_params)
-        alpha, zeta, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        if self.single_zeta:
+            alpha, zeta, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        else:
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device,
+                                                                    dtype=torch.float32).T
         loglikelihood = np.zeros(nb_chains)
         act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
@@ -46,6 +52,15 @@ class expSmoothing_prevAction(model.Model):
             0.5 * (unsqueeze(lapse_neg) + unsqueeze(lapse_pos)) * (torch.unsqueeze(side, 1) == 0)
         )
 
+        if self.single_zeta:
+            zeta_pos, zeta_neg = zeta, zeta
+
+        zetas = (
+                unsqueeze(zeta_pos) * (torch.unsqueeze(side, 1) > 0) +
+                unsqueeze(zeta_neg) * (torch.unsqueeze(side, 1) < 0) +
+                0.5 * (unsqueeze(zeta_pos) + unsqueeze(zeta_neg)) * (torch.unsqueeze(side, 1) == 0)
+        )
+
         for t in range(act.shape[-1]):
             if t > 0:
                 a_prev = torch.stack([act[:, t - 1]==-1, act[:, t - 1] == 1]) * 1
@@ -53,11 +68,11 @@ class expSmoothing_prevAction(model.Model):
                                                   alpha * torch.unsqueeze(a_prev.T[act[:, t - 1] != 0], 1))
                 values[act[:, t-1] == 0, :, t] = values[act[:, t-1] == 0, :, t - 1]
 
-        assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-6)
+        assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-5)
 
         values = torch.clamp(values, min=1e-8, max=1 - 1e-8)
-        pLeft = mut.combine_lkd_prior(stim, zeta, values[:, :, :, 1], lapses)
-        pRight = mut.combine_lkd_prior(-stim, zeta, values[:, :, :, 0], lapses)
+        pLeft = mut.combine_lkd_prior(stim, zetas, values[:, :, :, 1], lapses)
+        pRight = mut.combine_lkd_prior(-stim, zetas, values[:, :, :, 0], lapses)
         assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-4)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 

@@ -3,10 +3,10 @@ from scipy.special import digamma, betainc, logsumexp
 import pandas as pd
 
 from torch.distributions.normal import Normal
-def combine_lkd_prior(c_t, zeta, pi_t, epsilon_t, sigma=0.49):
-    sigma_star = torch.sqrt(1 / (sigma ** -2 + zeta ** -2))[None, :, None]
+def combine_lkd_prior(c_t, zetas, pi_t, epsilon_t, sigma=0.49):
+    sigma_star = torch.sqrt(1 / (sigma ** -2 + zetas ** -2))
     prior_contrib = Normal(loc=0, scale=1).icdf(1 - pi_t)
-    combined = c_t[:, None] / zeta[None, :, None] - zeta[None, :, None] / sigma_star * prior_contrib
+    combined = c_t[:, None] / zetas - zetas/ sigma_star * prior_contrib
     out = Normal(loc=0, scale=1).cdf(combined) * (1 - epsilon_t) + epsilon_t / 2.
     return torch.clamp(out, min=1e-7, max=1 - 1e-7)
 
