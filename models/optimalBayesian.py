@@ -108,10 +108,11 @@ class optimal_Bayesian(model.Model):
         predictive = torch.sum(alpha.reshape(nb_sessions, nb_chains, -1, self.nb_blocklengths, self.nb_typeblocks), 3)
         Pis = predictive[:, :, :, 0] * gamma + predictive[:, :, :, 1] * 0.5 + predictive[:, :, :, 2] * (1 - gamma)
 
-        values = torch.clamp(Pis, min=1e-8, max=1-1e-8)
-        pLeft = mut.combine_lkd_prior(stim, zetas,  (1 - Pis) , lapses)
-        pRight = mut.combine_lkd_prior(-stim, zetas, Pis, lapses)
-        assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-3)
+        values = torch.clamp(Pis, min=1e-6, max=1-1e-6)
+        pLeft = mut.combine_lkd_prior(stim, zetas,  (1 - Pis), lapses)
+        pRight = 1 - pLeft
+        #pRight = mut.combine_lkd_prior(-stim, zetas, Pis, lapses)
+        # assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-3)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         unsqueezed_lapses = torch.unsqueeze(lapses, 0)

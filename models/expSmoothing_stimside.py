@@ -47,7 +47,7 @@ class expSmoothing_stimside(model.Model):
         else:
             alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params, device=self.device,
                                                                                      dtype=torch.float32).T
-        act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
+        act, stim, side = torch.tensor(act, dtype=torch.float32), torch.tensor(stim, dtype=torch.float32), torch.tensor(side, dtype=torch.float32)
         nb_sessions = len(act)
 
         values = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64) + 0.5
@@ -74,12 +74,12 @@ class expSmoothing_stimside(model.Model):
                 values[act[:,t-1] !=0, :, t] = (1 - alpha) * values[act[:,t-1] != 0, :, t-1] + alpha * torch.unsqueeze(s_prev.T[act[:,t-1] != 0], 1)
                 values[act[:,t-1] == 0, :, t] = values[act[:,t-1] == 0, :, t-1]
 
-                assert(torch.max(torch.abs(torch.sum(values[:, :, :t+1], axis=-1) - 1)) < 1e-4)
+        #assert (torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-5)
 
-        values = torch.clamp(values, min=1e-8, max=1-1e-8)
+        values = torch.clamp(values, min=1e-6, max=1 - 1e-6)
         pLeft = mut.combine_lkd_prior(stim, zetas, values[:, :, :, 1], lapses)
-        pRight = mut.combine_lkd_prior(-stim, zetas, values[:, :, :, 0], lapses)
-        assert (torch.max(torch.abs(pLeft + pRight - 1)) <= 1e-3)
+        pRight = 1 - pLeft # pRight = mut.combine_lkd_prior(-stim, zetas, values[:, :, :, 0], lapses)
+        #assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-5)
         pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
 
         unsqueezed_lapses = torch.unsqueeze(lapses, 0)

@@ -5,11 +5,12 @@ from tqdm import tqdm
 import numpy as np
 from behavior_models.models import utils as but
 import itertools
-from models import expSmoothing_stimside, expSmoothing_prevAction, optimalBayesian
+from models import expSmoothing_stimside, expSmoothing_prevAction, optimalBayesian, utils
+import os
 
 list_of_models = [
-                expSmoothing_stimside.expSmoothing_stimside,
-                expSmoothing_prevAction.expSmoothing_prevAction,
+                #expSmoothing_prevAction.expSmoothing_prevAction,
+                #expSmoothing_stimside.expSmoothing_stimside,
                 optimalBayesian.optimal_Bayesian
 ]
 
@@ -52,15 +53,16 @@ for i_subj, subj in tqdm(enumerate(uniq_subject)):
             print('established {} training sessions'.format(len(training_sessions)))
 
             for i_model_type, model_type in enumerate(list_of_models):
-                model = model_type('./results_sandbox/', session_uuids, subj, actions, stimuli, stim_side, single_zeta=False)
+                model = model_type('./results_optLkd', session_uuids, subj, actions, stimuli, stim_side, single_zeta=True)
                 for idx_perm in range(len(training_sessions)):
-                    model.load_or_train(sessions_id=training_sessions[idx_perm], remove_old=False, adaptive=True)
+                    loadpath = utils.build_path(model.path_results_mouse, model.session_uuids[training_sessions[idx_perm]])
+                    model.load_or_train(sessions_id=training_sessions[idx_perm], remove_old=True, adaptive=True)
                     loglkds[i_subj, i_model_type], accuracies[i_subj, i_model_type] = model.score(sessions_id_test=testing_sessions[idx_perm],
-                                                                                                  sessions_id=training_sessions[idx_perm], remove_old=False)
-                model.get_parameters(parameter_type='posterior_mean')
+                                                                                                  sessions_id=training_sessions[idx_perm], remove_old=True)
+                    model.get_parameters(parameter_type='posterior_mean')
 
 loglkds = loglkds[np.all(loglkds != 0, axis=-1)]
 accuracies = accuracies[np.all(accuracies != 0, axis=-1)]
 
 from scipy.stats import pearsonr, wilcoxon
-wilcoxon(accuracies[:, 1] - accuracies[:, -1])
+wilcoxon(accuracies[:, 0] - accuracies[:, 1])
