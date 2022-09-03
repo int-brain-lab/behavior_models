@@ -92,16 +92,16 @@ class optimal_Bayesian(model.Model):
 
         for i_trial in range(act.shape[-1]):
             # save priors
-            if i_trial >= 90:  # python indexing starts at 0
-                if i_trial > 90:
+            if i_trial >= 0:  # python indexing starts at 0
+                if i_trial > 0:
                     alpha[:, :, i_trial] = torch.sum(torch.unsqueeze(h, -1) * transition, axis=2) * to_update[:,i_trial-1] + alpha[:,:,i_trial-1] * (1 - to_update[:,i_trial-1])
-                else:
-                    alpha = torch.zeros(
-                        [nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks],
-                        device=self.device, dtype=torch.float32)
-                    alpha[:, :, i_trial, 0, 0] = 0.5
-                    alpha[:, :, i_trial, 0, -1] = 0.5
-                    alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
+                #else:
+                #    alpha = torch.zeros(
+                #        [nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks],
+                #        device=self.device, dtype=torch.float32)
+                #    alpha[:, :, i_trial, 0, 0] = 0.5
+                #    alpha[:, :, i_trial, 0, -1] = 0.5
+                #    alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
                 h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(1, 1, self.nb_blocklengths)
                 h = h/torch.unsqueeze(torch.sum(h, axis=-1), -1)
 
