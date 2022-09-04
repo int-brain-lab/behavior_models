@@ -71,7 +71,7 @@ class expSmoothing_prevAction(model.Model):
 
         # assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-5)
 
-        values = torch.clamp(values, min=1e-6, max=1 - 1e-6)
+        values = torch.clamp(values, min=1e-7, max=1 - 1e-7)
         pLeft = mut.combine_lkd_prior(stim, zetas, values[:, :, :, 1], lapses)
         pRight = 1 - pLeft # mut.combine_lkd_prior(-stim, zetas, values[:, :, :, 0], lapses)
         #assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-5)
@@ -97,10 +97,12 @@ class expSmoothing_prevAction(model.Model):
         assert(stim.shape == side.shape), 'side and stim don\'t have the same shape'
 
         nb_chains = len(arr_params)
-        if arr_params.shape[-1] == 4:
-            alpha, zeta, lapse_pos, lapse_neg = torch.tensor(arr_params).T
+        if self.single_zeta:
+            alpha, zeta, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device,
+                                                                    dtype=torch.float32).T
         else:
-            raise NotImplementedError
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params, device=self.device,
+                                                                    dtype=torch.float32).T
         stim, side = torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(stim)
 
@@ -109,26 +111,30 @@ class expSmoothing_prevAction(model.Model):
 
         valid_arr = np.tile(valid[:, np.newaxis,:,np.newaxis], (1, nb_chains, 1, nb_simul))
 
-        alpha = torch.unsqueeze(unsqueeze(alpha), -1)
-        zetas = unsqueeze(zeta) * (torch.unsqueeze(side,1) > 0) + unsqueeze(zeta) * (torch.unsqueeze(side,1) <= 0)
+        alpha = unsqueeze(alpha)
         lapses = (
             unsqueeze(lapse_pos) * (torch.unsqueeze(side,1) > 0) +
             unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0) +
             0.5 * (unsqueeze(lapse_neg) + unsqueeze(lapse_pos)) * (torch.unsqueeze(side, 1) == 0)
         )
-        Rho = torch.unsqueeze(torch.minimum(torch.maximum(Normal(loc=torch.unsqueeze(stim, 1), scale=zetas).cdf(torch.tensor(0)),
-                                                          torch.tensor(1e-7)), torch.tensor(1 - 1e-7)), -1) # pRight likelihood
+
+        if self.single_zeta:
+            zeta_pos, zeta_neg = zeta, zeta
+
+        zetas = (
+                unsqueeze(zeta_pos) * (torch.unsqueeze(side, 1) > 0) +
+                unsqueeze(zeta_neg) * (torch.unsqueeze(side, 1) < 0) +
+                0.5 * (unsqueeze(zeta_pos) + unsqueeze(zeta_neg)) * (torch.unsqueeze(side, 1) == 0)
+        )
 
         for t in range(stim.shape[-1]):
             if t > 0:
                 a_prev = torch.stack([act_sim[:, :, t - 1].T==-1, act_sim[:, :, t - 1].T==1]) * 1
                 values[:, :, t] = (1 - alpha) * values[:, :, t-1] + alpha * a_prev.T
-            pRight, pLeft = values[:, :, t, :, 0] * Rho[:, :, t], values[:, :, t, :, 1] * (1 - Rho[:, :, t])
-            pActions = torch.stack((pRight/(pRight + pLeft), pLeft/(pRight + pLeft)))
-            pActions = pActions * (1 - lapses[:, :, t]) + lapses[:, :, t] / 2.
+            values = torch.clamp(values, min=1e-7, max=1 - 1e-7)
+            pLeft = mut.combine_lkd_prior(stim[:, t, None], zetas[:, :, t, None], values[:, :, t, :, 1], lapses[:, :, t, None])
+            pActions = torch.stack((1 - pLeft, pLeft))
             act_sim[:, :, t] = 2 * (torch.rand(nb_sessions, nb_chains, nb_simul) < pActions[1]) - 1
-
-        assert(torch.max(torch.abs(torch.sum(values, axis=-1) - 1)) < 1e-6)
 
         correct = (act_sim == side[:, np.newaxis, :, np.newaxis])
         correct = np.array(correct, dtype=np.float)
