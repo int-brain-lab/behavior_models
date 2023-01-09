@@ -126,7 +126,7 @@ if not isinstance(regressor_files, pd.Series):
         # sel_sess = np.array([np.sum(p_sess <= sel_p[k]) for k in range(len(sel_p))])
         # training_sessions = training_sessions[sel_sess]
         # testing_sessions = testing_sessions[sel_sess]
-        session_uuids, actions, stimuli, stim_side = get_data_cv(eids_files)
+        session_uuids, actions, stimuli, stim_side = get_data_cv(eids_files, modality)
         if len(training_sessions) > 0:
             print("established {} training sessions".format(len(training_sessions)))
             for (model_beh, can_have_repBias, with_repBias) in list_of_models:
