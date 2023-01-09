@@ -31,7 +31,7 @@ class expSmoothing_stimside_4alphas(model.Model):
                 np.array([0, 0, 0, 0, 0, 0, 0]),
                 np.array([1, 1, 1, 1, 1, 0.5, 0.5]),
             )
-            std_RW = np.array([0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01])
+            std_RW = np.array([0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01])
         else:
             nb_params, lb_params, ub_params = (
                 8,

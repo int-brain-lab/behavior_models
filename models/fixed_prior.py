@@ -78,11 +78,11 @@ class fixed_prior(model.Model):
         """
         if not self.repetition_bias and not self.single_zeta:
             alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(arr_params).T
-        elif not self.repetition_bias:
+        if not self.repetition_bias and self.single_zeta:
             alpha, zeta, lapse_pos, lapse_neg = torch.tensor(arr_params).T
-        elif self.single_zeta:
+        if self.single_zeta and self.repetition_bias:
             alpha, zeta, lapse_pos, lapse_neg, rep_bias = torch.tensor(arr_params).T
-        else:
+        if not self.single_zeta and self.repetition_bias:
             alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(
                 arr_params
             ).T

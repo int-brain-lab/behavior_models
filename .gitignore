@@ -1,3 +1,4 @@
+models/all_candidate_models/
 comparison*
 cv_on_simulations.py
 models/expSmoothing_prevAction2.py
@@ -5,15 +6,15 @@ models/biased*
 models/expSmoothing_contrasts*
 models/expSmoothing_prevAction_*
 models/fixed_prior.py
-models/*likelihood.py
+models/all_candidate_models/likelihood.py
 biasedVSunbiased/
 models/expSmoothing_stimside_*alpha*.py
 models/expSmoothing_prevAction_prevStimSide.py
-models/expSmoothing_stimcontrast.py
+models/all_candidate_models/expSmoothing_stimcontrast.py
 models/expSmoothing_stimside_*ontrast.py
 models/expSmoothing_stimside_*rior.py
-models/prevAction*.py
-models/stimside*.py
+models/all_candidate_models/prevAction.py
+models/all_candidate_models/stimside.py
 script.py
 script_1sess.py
 script_*Wise.py

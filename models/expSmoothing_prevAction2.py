@@ -1,10 +1,8 @@
 from models import model
-import torch, utils
+import torch
 import numpy as np
 from torch.distributions.normal import Normal
 from models import utils as mut
-
-unsqueeze = lambda x: torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
 
 class expSmoothing_prevAction2(model.Model):
@@ -22,21 +20,21 @@ class expSmoothing_prevAction2(model.Model):
         stim_side,
         single_zeta=True,
     ):
-        name = "expSmoothing_prevAction2" + "_single_zeta" * single_zeta
+        name = "expSmoothing_prevAction2_lr_constrained" + "_single_zeta" * single_zeta
         if single_zeta:
-            nb_params, lb_params, ub_params = (
-                7,
-                np.array([0, 0, 0, 0, 0, 0, 0]),
-                np.array([1, 1, 1, 1, 1, 0.5, 0.5]),
-            )
-            std_RW = np.array([0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01])
-        else:
             nb_params, lb_params, ub_params = (
                 6,
                 np.array([0, 0, 0, 0, 0, 0]),
                 np.array([1, 1, 1, 1, 0.5, 0.5]),
             )
             std_RW = np.array([0.02, 0.02, 0.02, 0.02, 0.01, 0.01])
+        else:
+            nb_params, lb_params, ub_params = (
+                7,
+                np.array([0, 0, 0, 0, 0, 0, 0]),
+                np.array([1, 1, 1, 1, 1, 0.5, 0.5]),
+            )
+            std_RW = np.array([0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01])
         self.single_zeta = single_zeta
         super().__init__(
             name,
@@ -53,18 +51,6 @@ class expSmoothing_prevAction2(model.Model):
         )
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
-        """
-        Generates the loglikelihood (and prior)
-        Params:
-            arr_params (array): parameter of shape [nb_chains, nb_params]
-            act (array of shape [nb_sessions, nb_trials]): action performed by the mice of shape
-            stim (array of shape [nb_sessions, nb_trials]): stimulus contraste (between -1 and 1) observed by the mice
-            side (array of shape [nb_sessions, nb_trials]): stimulus side (-1 (right), 1 (left)) observed by the mice
-            return_details (boolean). If true, only return loglikelihood, else, return loglikelihood and prior
-        Output:
-            loglikelihood (array of length nb_chains): loglikelihood for each chain
-            values (array of shape [nb_sessions, nb_chains, nb_trials, 2]): prior for each chain and session
-        """
         nb_chains = len(arr_params)
         if self.single_zeta:
             (
@@ -97,24 +83,13 @@ class expSmoothing_prevAction2(model.Model):
             + 0.5
         )
 
-        alpha_a, alpha_s = unsqueeze(alpha_a), unsqueeze(alpha_s)
-        lapses = (
-            unsqueeze(lapse_pos) * (torch.unsqueeze(side, 1) > 0)
-            + unsqueeze(lapse_neg) * (torch.unsqueeze(side, 1) < 0)
-            + 0.5
-            * (unsqueeze(lapse_neg) + unsqueeze(lapse_pos))
-            * (torch.unsqueeze(side, 1) == 0)
-        )
-
         if self.single_zeta:
             zeta_pos, zeta_neg = zeta, zeta
 
-        zetas = (
-            unsqueeze(zeta_pos) * (torch.unsqueeze(side, 1) > 0)
-            + unsqueeze(zeta_neg) * (torch.unsqueeze(side, 1) < 0)
-            + 0.5
-            * (unsqueeze(zeta_pos) + unsqueeze(zeta_neg))
-            * (torch.unsqueeze(side, 1) == 0)
+        alpha_a, alpha_s = mut.unsqueeze(alpha_a), mut.unsqueeze(alpha_s)
+        alpha_s = alpha_a + alpha_s * (1 - alpha_a)  # make alpha_s greater than alpha_a
+        lapses, zetas = mut.get_parameters(
+            lapse_pos, lapse_neg, side, zeta_pos, zeta_neg
         )
 
         for t in range(act.shape[-1]):
@@ -140,40 +115,16 @@ class expSmoothing_prevAction2(model.Model):
         assert torch.max(torch.abs(torch.sum(values_s, axis=-1) - 1)) < 1e-6
         assert torch.max(torch.abs(torch.sum(values_a, axis=-1) - 1)) < 1e-6
 
-        values = values_s * torch.unsqueeze(unsqueeze(weights), -1) + values_a * (
-            1 - torch.unsqueeze(unsqueeze(weights), -1)
+        values = values_s * torch.unsqueeze(mut.unsqueeze(weights), -1) + values_a * (
+            1 - torch.unsqueeze(mut.unsqueeze(weights), -1)
         )
 
-        values = torch.clamp(values, min=1e-7, max=1 - 1e-7)
-        pLeft = mut.combine_lkd_prior(stim, zetas, values[:, :, :, 1], lapses)
-        pRight = (
-            1 - pLeft
-        )  # mut.combine_lkd_prior(-stim, zetas, values[:, :, :, 0], lapses)
-        # assert (torch.max(torch.abs(pLeft + pRight - 1)) < 1e-5)
-        pActions = torch.stack((pRight / (pRight + pLeft), pLeft / (pRight + pLeft)))
-
-        belief = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (
-            torch.unsqueeze(act, 1) == 1
-        )
-        correct = (act == side) * 1
-        prediction_error = torch.unsqueeze(correct, 1) - belief
-
-        pActions = (
-            pActions * (1 - torch.unsqueeze(lapses, 0))
-            + torch.unsqueeze(lapses, 0) / 2.0
+        logp_ch, pActions, prediction_error = mut.compute_logp_ch_and_pe(
+            values[:, :, :, 1], stim, act, side, zetas, lapses, repetition_bias=None
         )
 
-        p_ch = (
-            pActions[0] * (torch.unsqueeze(act, 1) == -1)
-            + pActions[1] * (torch.unsqueeze(act, 1) == 1)
-            + 1 * (torch.unsqueeze(act, 1) == 0)
-        )  # discard trials where agent did not answer
-        p_ch = torch.minimum(
-            torch.maximum(p_ch, torch.tensor(1e-8)), torch.tensor(1 - 1e-8)
-        )
-        logp_ch = torch.log(p_ch)
         if return_details:
-            return logp_ch, values[:, :, :, 1], prediction_error
+            return logp_ch, values[:, :, :, 1], pActions
         return np.array(torch.sum(logp_ch, axis=(0, -1)))
 
     def simulate(self, arr_params, stim, side, valid, nb_simul=50):
