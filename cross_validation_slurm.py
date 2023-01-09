@@ -121,11 +121,11 @@ if not isinstance(regressor_files, pd.Series):
                 for k in range(len(training_sessions))
             ]
         )
-        sel_p = np.array([0.4999])  # [0.33, 0.66, 1.]) # take the most middle session
-        p_sess = np.arange(1, len(training_sessions) + 1) / len(training_sessions)
-        sel_sess = np.array([np.sum(p_sess <= sel_p[k]) for k in range(len(sel_p))])
-        training_sessions = training_sessions[sel_sess]
-        testing_sessions = testing_sessions[sel_sess]
+        # sel_p = np.array([0.4999])  # [0.33, 0.66, 1.]) # take the most middle session
+        # p_sess = np.arange(1, len(training_sessions) + 1) / len(training_sessions)
+        # sel_sess = np.array([np.sum(p_sess <= sel_p[k]) for k in range(len(sel_p))])
+        # training_sessions = training_sessions[sel_sess]
+        # testing_sessions = testing_sessions[sel_sess]
         session_uuids, actions, stimuli, stim_side = get_data_cv(eids_files)
         if len(training_sessions) > 0:
             print("established {} training sessions".format(len(training_sessions)))
