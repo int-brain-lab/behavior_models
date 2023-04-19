@@ -191,3 +191,67 @@ class expSmoothing_prevAction(model.Model):
             return act_sim, stim, side, values[:, :, 1]
         else:
             return act_sim, stim, side
+
+    def simulate_parallel(
+        self,
+        arr_params,
+        stim,
+        side,
+        nb_simul=50,
+    ):
+        """
+        custom
+        """
+        assert stim.shape == side.shape, "side and stim don't have the same shape"
+
+        if self.single_zeta:
+            alpha, zeta, lapse_pos, lapse_neg = torch.tensor(
+                arr_params, device=self.device, dtype=torch.float32
+            ).T
+        else:
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(
+                arr_params, device=self.device, dtype=torch.float32
+            ).T
+        stim, side = torch.tensor(stim), torch.tensor(side)
+
+        nb_sessions = len(stim)
+        act_sim = torch.zeros(nb_sessions, stim.shape[-1], nb_simul)
+        values = (
+            torch.zeros([nb_sessions, stim.shape[-1], nb_simul, 2], dtype=torch.float64)
+            + 0.5
+        )
+
+        lapses = (
+            lapse_pos * (side > 0)
+            + lapse_neg * (side < 0)
+            + 0.5 * (lapse_neg + lapse_pos) * (side == 0)
+        )
+
+        if self.single_zeta:
+            zeta_pos, zeta_neg = zeta, zeta
+
+        zetas = (
+            zeta_pos * (side > 0)
+            + zeta_neg * (side < 0)
+            + 0.5 * (zeta_pos + zeta_neg) * (side == 0)
+        )
+
+        for t in range(stim.shape[-1]):
+            if t > 0:
+                a_prev = torch.swapaxes(
+                    torch.stack([act_sim[:, t - 1] == -1, act_sim[:, t - 1] == 1]) * 1,
+                    1,
+                    2,
+                )
+                values[:, t] = (1 - alpha) * values[:, t - 1] + alpha * a_prev.T
+            values = torch.clamp(values, min=1e-7, max=1 - 1e-7)
+            sigma_star = torch.sqrt(1 / (0.49**-2 + zetas[:, t] ** -2))
+            prior_contrib = Normal(loc=0, scale=1).icdf(1 - values[:, t, :, 1])
+            combined = (stim[:, t] / zetas[:, t])[:, None] - zetas[:, t][
+                :, None
+            ] / sigma_star[:, None] * prior_contrib
+            pLeft = Normal(loc=0, scale=1).cdf(combined)
+            pLeft = pLeft * (1 - lapses[:, t, None]) + lapses[:, t, None] / 2.0
+            act_sim[:, t] = 2 * (torch.rand_like(pLeft) < pLeft) - 1
+
+        return act_sim, stim, side

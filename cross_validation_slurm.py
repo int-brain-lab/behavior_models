@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-from braindelphi.decoding.functions.utils import load_metadata
-from braindelphi.params import CACHE_PATH
-from braindelphi.params import BEH_MOD_PATH as BEHAVIOR_MOD_PATH
+from code.decoding.functions.utils import load_metadata
+from code.params import CACHE_PATH
+from code.params import BEH_MOD_PATH as BEHAVIOR_MOD_PATH
 from tqdm import tqdm
 import pickle
 from pathlib import Path
