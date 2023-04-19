@@ -105,7 +105,7 @@ class optimal_Bayesian(model.Model):
             device=self.device,
             dtype=torch.float32,
         )
-        alpha[:, :, 0, 0, :] = 1.0 / 3
+        alpha[:, :, 0, 0, 1] = 1.0
         alpha = alpha.reshape(
             nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths
         )
