@@ -2,22 +2,15 @@ import numpy as np
 import pandas as pd
 from code.decoding.functions.utils import load_metadata
 from code.params import CACHE_PATH
-from code.params import BEH_MOD_PATH as BEHAVIOR_MOD_PATH
 from tqdm import tqdm
 import pickle
 from pathlib import Path
 from behavior_models.models.utils import format_data as format_data_mut
 import itertools
-from models.utils import BMS_dirichlet
 
 from behavior_models.models.expSmoothing_prevAction import expSmoothing_prevAction
 from behavior_models.models.expSmoothing_stimside import expSmoothing_stimside
 from behavior_models.models.optimalBayesian import optimal_Bayesian
-from behavior_models.models.expSmoothing_prevAction2 import expSmoothing_prevAction2
-from behavior_models.models.fixed_prior import fixed_prior
-from behavior_models.models.expSmoothing_prevAction_prevStimSide import (
-    expSmoothing_prevAction_prevStimSide,
-)
 from behavior_models.models.expSmoothing_stimside_4alphas import (
     expSmoothing_stimside_4alphas,
 )
