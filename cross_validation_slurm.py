@@ -24,14 +24,10 @@ from behavior_models.models.expSmoothing_stimside_4alphas import (
 
 # model, can_have_repBias, with_repBias
 list_of_models = [
-    # (expSmoothing_prevAction2, False, False),
-    # (expSmoothing_prevAction_prevStimSide, False, False),
     (expSmoothing_stimside, True, False),
     (expSmoothing_stimside, True, True),
     (optimal_Bayesian, True, False),
     (optimal_Bayesian, True, True),
-    (fixed_prior, True, False),
-    (fixed_prior, True, True),
     (expSmoothing_prevAction, False, False),
     (expSmoothing_stimside_4alphas, True, False),
     (expSmoothing_stimside_4alphas, True, True),
@@ -121,11 +117,6 @@ if not isinstance(regressor_files, pd.Series):
                 for k in range(len(training_sessions))
             ]
         )
-        # sel_p = np.array([0.4999])  # [0.33, 0.66, 1.]) # take the most middle session
-        # p_sess = np.arange(1, len(training_sessions) + 1) / len(training_sessions)
-        # sel_sess = np.array([np.sum(p_sess <= sel_p[k]) for k in range(len(sel_p))])
-        # training_sessions = training_sessions[sel_sess]
-        # testing_sessions = testing_sessions[sel_sess]
         session_uuids, actions, stimuli, stim_side = get_data_cv(eids_files, modality)
         if len(training_sessions) > 0:
             print("established {} training sessions".format(len(training_sessions)))
