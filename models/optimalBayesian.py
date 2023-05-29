@@ -21,11 +21,15 @@ class optimal_Bayesian(model.Model):
         stim_side,
         single_zeta,
         repetition_bias=False,
+        with_unbiased=False,
+        single_lapserate=False,
     ):
         name = (
             "optimal_bayesian"
             + "_with_repBias" * repetition_bias
             + "_single_zeta" * single_zeta
+            + "_with_unbiased" * with_unbiased
+            + "_single_lapserate" * single_lapserate
         )
         self.single_zeta = single_zeta
         nb_params = 3 + (not single_zeta) * 1
@@ -41,6 +45,9 @@ class optimal_Bayesian(model.Model):
             std_RW = np.append(std_RW, 0.01)
             nb_params += 1
 
+        self.with_unbiased = with_unbiased
+        self.single_lapserate = single_lapserate
+        
         super().__init__(
             name,
             path_to_results,
@@ -118,9 +125,14 @@ class optimal_Bayesian(model.Model):
         if self.single_zeta:
             zeta_pos, zeta_neg = zeta, zeta
 
-        lapses, zetas = mut.get_parameters(
-            lapse_pos, lapse_neg, side, zeta_pos, zeta_neg
-        )
+        if self.single_lapserate:
+            lapses, zetas = mut.get_parameters(
+                lapse_pos, lapse_pos, side, zeta_pos, zeta_neg
+            )
+        else:            
+            lapses, zetas = mut.get_parameters(
+                lapse_pos, lapse_neg, side, zeta_pos, zeta_neg
+            )
 
         # build transition matrix
         b = torch.zeros(
@@ -165,26 +177,29 @@ class optimal_Bayesian(model.Model):
             ]
         ).T
         to_update = torch.unsqueeze(torch.unsqueeze(act != 0, -1), -1) * 1
-
-        for i_trial in range(act.shape[-1]):
-            if i_trial >= 0:  # python indexing starts at 0
-                if i_trial > 0:
-                    alpha[:, :, i_trial] = torch.sum(
-                        torch.unsqueeze(h, -1) * transition, axis=2
-                    ) * to_update[:, i_trial - 1] + alpha[:, :, i_trial - 1] * (
-                        1 - to_update[:, i_trial - 1]
-                    )
-                # else:
-                #    alpha = torch.zeros(
-                #        [nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks],
-                #        device=self.device, dtype=torch.float32)
-                #    alpha[:, :, i_trial, 0, 0] = 0.5
-                #    alpha[:, :, i_trial, 0, -1] = 0.5
-                #    alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
-                h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(
-                    1, 1, self.nb_blocklengths
+        
+        for i_trial in range(act.shape[-1]):            
+            if (i_trial > 0 and not self.with_unbiased) or (self.with_unbiased and i_trial > 90):
+                alpha[:, :, i_trial] = torch.sum(
+                    torch.unsqueeze(h, -1) * transition, axis=2
+                ) * to_update[:, i_trial - 1] + alpha[:, :, i_trial - 1] * (
+                    1 - to_update[:, i_trial - 1]
                 )
-                h = h / torch.unsqueeze(torch.sum(h, axis=-1), -1)
+            elif (self.with_unbiased and i_trial == 90):
+                alpha = torch.zeros(
+                    [nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks],
+                    device=self.device, dtype=torch.float32)
+                alpha[:, :, :i_trial, 0, 1] = 1.0                
+                alpha[:, :, i_trial, 0, 0] = 0.5
+                alpha[:, :, i_trial, 0, -1] = 0.5
+                alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
+            elif self.with_unbiased:
+                alpha[:, :, i_trial] = alpha[:, :, i_trial - 1]
+            h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(
+                1, 1, self.nb_blocklengths
+            )                
+            
+            h = h / torch.unsqueeze(torch.sum(h, axis=-1), -1)
 
         predictive = torch.sum(
             alpha.reshape(
