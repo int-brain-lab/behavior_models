@@ -1,3 +1,9 @@
+supopt_vs_opt.py
+models/all_candidate_models/
+pRight/
+*.zip
+*.ipynb
+*.pdf
 comparison*
 cv_on_simulations.py
 models/expSmoothing_prevAction2.py
