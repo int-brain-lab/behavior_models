@@ -5,6 +5,7 @@ legacies
 *.ipynb
 *pdf
 models/all_candidate_models/
+pRight/
 comparison*
 cv_on_simulations.py
 models/expSmoothing_prevAction2.py
