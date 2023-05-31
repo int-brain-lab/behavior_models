@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-from code.decoding.functions.utils import load_metadata
-from code.params import CACHE_PATH
+from prior_pipelines.decoding.functions.utils import load_metadata
+from prior_pipelines.params import CACHE_PATH
 from tqdm import tqdm
 import pickle
 from pathlib import Path
@@ -17,13 +17,13 @@ from behavior_models.models.expSmoothing_stimside_4alphas import (
 
 # model, can_have_repBias, with_repBias
 list_of_models = [
-    (expSmoothing_stimside, True, False),
-    (expSmoothing_stimside, True, True),
-    (optimal_Bayesian, True, False),
-    (optimal_Bayesian, True, True),
+    #(expSmoothing_stimside, True, False),
+    #(expSmoothing_stimside, True, True),
+    #(optimal_Bayesian, True, False),
+    #(optimal_Bayesian, True, True),
     (expSmoothing_prevAction, False, False),
-    (expSmoothing_stimside_4alphas, True, False),
-    (expSmoothing_stimside_4alphas, True, True),
+    #(expSmoothing_stimside_4alphas, True, False),
+    #(expSmoothing_stimside_4alphas, True, True),
 ]
 
 
