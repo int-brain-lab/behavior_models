@@ -116,7 +116,7 @@ if not isinstance(regressor_files, pd.Series):
             for (model_beh, can_have_repBias, with_repBias) in list_of_models:
                 if can_have_repBias:
                     model = model_beh(
-                        "./results_final_allsessions_cv/",
+                        "./results_final_test/",
                         session_uuids,
                         subject_name,
                         actions,
@@ -127,7 +127,7 @@ if not isinstance(regressor_files, pd.Series):
                     )
                 else:
                     model = model_beh(
-                        "./results_final_v1/",
+                        "./results_final_test/",
                         session_uuids,
                         subject_name,
                         actions,
