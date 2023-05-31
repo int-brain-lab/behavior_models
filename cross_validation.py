@@ -78,7 +78,7 @@ import sys
 try:
     i_subj = int(sys.argv[1]) - 1
 except:
-    i_subj = 0
+    i_subj = 7
     pass
 
 modality = "ephys"  # 'ephys'
@@ -169,3 +169,20 @@ if not isinstance(regressor_files, pd.Series):
                             session_uuids.tolist(),
                         ]
                     )
+
+
+outdf = pd.DataFrame(outlist,
+               columns =["i_subj", 
+                         "idx_perm", 
+                         "training_sessions", 
+                         "testing_sessions", 
+                         "subject_name", 
+                         "nb_sessions", 
+                         "model_name", 
+                         "with_repBias", 
+                         "loglkd",
+                         "acc",
+                         "posterior_mean",
+                         "session_uuids"])
+
+outdf.to_parquet(f'outdf_{subject_name}.parquet')
