@@ -1,7 +1,10 @@
-from models import model, utils
+from behavior_models.models import model, utils
 import torch
 import numpy as np
-from models import utils as mut
+from behavior_models.models import utils as mut
+from iblutil.util import setup_logger
+
+logger = setup_logger('ibl')
 
 
 class optimal_Bayesian(model.Model):
@@ -61,6 +64,11 @@ class optimal_Bayesian(model.Model):
             ub_params,
             std_RW,
         )
+        if torch.cuda.is_available():
+            self.use_gpu = True
+            self.device = torch.device("cuda:0")
+            logger.info("Using GPU")
+
         self.nb_blocklengths, self.nb_typeblocks = 100, 3
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
@@ -226,4 +234,4 @@ class optimal_Bayesian(model.Model):
 
         if return_details:
             return logp_ch, priors, pActions
-        return np.array(torch.sum(logp_ch, axis=(0, -1)))
+        return torch.sum(logp_ch, axis=(0, -1)).cpu().numpy()

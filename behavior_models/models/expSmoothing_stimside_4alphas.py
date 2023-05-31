@@ -1,7 +1,7 @@
-from models import model
+from behavior_models import model
 import torch
 import numpy as np
-from models import utils as mut
+from behavior_models import utils as mut
 
 
 class expSmoothing_stimside_4alphas(model.Model):

@@ -1,4 +1,4 @@
-from models import utils
+from behavior_models.models import utils
 import numpy as np
 from scipy.stats import truncnorm
 import os, pickle
@@ -6,6 +6,7 @@ from tqdm import tqdm
 from scipy.special import logsumexp
 import warnings, torch
 from pathlib import Path
+
 
 class Model():
     '''
@@ -59,16 +60,10 @@ class Model():
             if verbose:
                 print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
 
-        if torch.cuda.is_available():
-            self.use_gpu = True
-            self.device = torch.device("cuda:0")
-            if verbose:
-                print("GPU is available")
-        else:
-            self.use_gpu = False
-            self.device = torch.device("cpu")
-            if verbose:
-                print("no GPU found")
+        self.use_gpu = False
+        self.device = torch.device("cpu")
+        if verbose:
+            print("no GPU found")
 
     #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):

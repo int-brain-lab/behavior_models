@@ -545,7 +545,7 @@ def clean_up(plt):
 
 
 if __name__ == "__main__":
-    from models import utils as mut
+    from behavior_models import utils as mut
 
     c_t = torch.tensor([[-0.1250]])
     zeta_ = torch.tensor([0.0001], dtype=torch.float64)

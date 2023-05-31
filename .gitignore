@@ -40,3 +40,4 @@ figures/
 *.pkl
 results*/
 cross_validation.py
+*.egg-info/

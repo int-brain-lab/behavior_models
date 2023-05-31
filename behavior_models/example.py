@@ -1,7 +1,7 @@
 import numpy as np
-from models.expSmoothing_prevAction import expSmoothing_prevAction
-from models.expSmoothing_stimside import expSmoothing_stimside
-from models.optimalBayesian import optimal_Bayesian
+from behavior_models.models.expSmoothing_prevAction import expSmoothing_prevAction
+from behavior_models.models.expSmoothing_stimside import expSmoothing_stimside
+from behavior_models.models.optimalBayesian import optimal_Bayesian as CurrentModel
 from behavior_models.models import utils as but
 import pickle
 from one.api import ONE
@@ -51,7 +51,7 @@ session_uuids = np.array([session_id])
 nb_sessions = len(actions)
 
 # instanciate model
-model = expSmoothing_prevAction(
+model = CurrentModel(
     "results_behavioral/",
     session_uuids,
     subject,

@@ -1,8 +1,8 @@
-from models import model
+from behavior_models.models import model
 import torch
 import numpy as np
 from torch.distributions.normal import Normal
-from models import utils as mut
+from behavior_models.models import utils as mut
 
 unsqueeze = lambda x: torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
