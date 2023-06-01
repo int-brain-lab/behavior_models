@@ -1,7 +1,10 @@
+import gc
+import subprocess
+
 import numpy as np
 from scipy.special import digamma, betainc, logsumexp
 import pandas as pd
-
+import torch
 from torch.distributions.normal import Normal
 
 
@@ -97,7 +100,7 @@ def build_path(
     for k in range(len(l_sessionuuids_train)):
         str_sessionuuids += "_{}".format(l_sessionuuids_train[k])
     if l_sessionuuids_test is None:
-        path = path_results_mouse + "train{}.pkl".format(str_sessionuuids)
+        path = path_results_mouse.joinpath(f"train{format(str_sessionuuids)}.pkl")
         return path
     else:
         assert (
@@ -105,10 +108,8 @@ def build_path(
         ), "trial_types can not be None if l_sessionuuids_test is not None"
         str_sessionuuids_test = ""
         for k in range(len(l_sessionuuids_test)):
-            str_sessionuuids_test += "_{}".format(l_sessionuuids_test[k])
-        path = path_results_mouse + "train{}_test{}_trialtype_{}.pkl".format(
-            str_sessionuuids, str_sessionuuids_test, trial_types
-        )
+            str_sessionuuids_test.joinpath(f"_{l_sessionuuids_test[k]}")
+        path = path_results_mouse.joinpath(f"train{str_sessionuuids}_test{str_sessionuuids_test}_trialtype_{trial_types}.pkl")
         return path
 
 
@@ -504,10 +505,6 @@ def estimate_Gamma(theta, weights):  # gamma for precision of normal = 1./var
     return a, 1 / b
 
 
-import torch
-import gc
-
-
 def get_cuda_variable():
     for obj in gc.get_objects():
         try:
@@ -517,9 +514,6 @@ def get_cuda_variable():
                 print(type(obj), obj.size())
         except:
             pass
-
-
-import subprocess
 
 
 def get_gpu_memory_map():
@@ -560,3 +554,7 @@ if __name__ == "__main__":
     )
 
     Normal(loc=0, scale=1).icdf(1 - torch.tensor([[[1.0 - 1e-16]]]))
+
+
+def unsqueeze(x):
+    return torch.unsqueeze(torch.unsqueeze(x, 0), -1)

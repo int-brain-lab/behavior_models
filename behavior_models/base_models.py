@@ -1,18 +1,24 @@
-from behavior_models.models import utils
+import os, pickle
+from pathlib import Path
+import warnings, torch
+
 import numpy as np
 from scipy.stats import truncnorm
-import os, pickle
 from tqdm import tqdm
 from scipy.special import logsumexp
-import warnings, torch
-from pathlib import Path
+
+from behavior_models import utils
+from iblutil.util import setup_logger
+
+logger = setup_logger('ibl')
 
 
-class Model():
+class PriorModel(object):
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, name, path_to_results, session_uuids, mouse_name, actions, stimuli, stim_side, nb_params, lb_params, ub_params, std_RW=0.02, train_method='MCMC', verbose=False):
+    def __init__(self, path_to_results=None, session_uuids=None, mouse_name=None, actions=None, stimuli=None,
+                 stim_side=None, nb_params=None, lb_params=None, ub_params=None, std_RW=0.02, train_method='MCMC', verbose=False):
         '''
         Params:
             name (String): name of the model
@@ -30,26 +36,21 @@ class Model():
             ub_params (array of floats): upperboud bounds of parameters (e.g., if `nb_params=3`, np.array([1, 1, np.inf]))
             train_method (string): inference method (only MCMC is possible for the moment, and forever?)
         '''
-        self.name = name
         if train_method!='MCMC':
             raise NotImplementedError
         self.train_method = train_method
-        self.verbose = verbose
-        if verbose:
-            print('')
-            print('Initializing {} model'.format(name))
+        logger.setLevel('INFO') if verbose else logger.setLevel('WARNING')
+        logger.info(f'Initializing {self.name} model')
 
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
         assert(len(np.unique(self.session_uuids)) == len(self.session_uuids)), 'there is a problem in the session formatting. Contact Charles Findling'
 
-        self.path_to_results = str(path_to_results) + '/'  # Posix is better but this is incompatible with an older version of the code
+        self.path_to_results = Path(path_to_results)
         self.lb_params, self.ub_params, self.nb_params = lb_params, ub_params, nb_params
         self.mouse_name = mouse_name
-        if not os.path.exists(self.path_to_results):
-            Path(self.path_to_results).mkdir(parents=True, exist_ok=True)
-        self.path_results_mouse = self.path_to_results + self.mouse_name +'/model_{}_'.format(self.name)
-        if not os.path.exists(self.path_to_results + self.mouse_name):
-            Path(self.path_to_results + self.mouse_name).mkdir(parents=True, exist_ok=True)
+        self.path_results_mouse = self.path_to_results.joinpath(self.mouse_name, f'model_{self.name}_')
+        if not self.path_results_mouse.exists():
+            self.path_results_mouse.mkdir(parents=True, exist_ok=True)
         self.std_RW = std_RW
 
         self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
@@ -57,15 +58,10 @@ class Model():
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
-            if verbose:
-                print('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
-
+            logger.info('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
         self.use_gpu = False
         self.device = torch.device("cpu")
-        if verbose:
-            print("no GPU found")
 
-    #sessions_id = np.array([0, 1, 2], dtype=np.int); nb_chains=4; nb_steps=1000
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):
         '''
         Perform with inference MCMC
@@ -81,7 +77,7 @@ class Model():
         if initial_point is None:
             if np.any(np.isinf(self.lb_params)) or np.any(np.isinf(self.ub_params)):
                 assert(False), 'because your bounds are infinite, an initial_point must be specified'
-            initial_point = (self.lb_params + self.ub_params)/2.
+
             import sobol_seq
             grid = np.array(sobol_seq.i4_sobol_generate(self.nb_params, nb_chains))
             initial_point = self.lb_params + grid * (self.ub_params - self.lb_params)
@@ -92,19 +88,19 @@ class Model():
                 Nburn, nb_minimum = 500, 1000
             else:
                 Nburn, nb_minimum = 1000, 2000
-            print('Launching MCMC procedure with {} chains, {} max steps and {} std_RW. Early stopping is activated'.format(nb_chains, nb_steps, std_RW))
+            logger.info('Launching MCMC procedure with {} chains, {} max steps and {} std_RW. Early stopping is activated'.format(nb_chains, nb_steps, std_RW))
         else:            
             early_stop = False
             Nburn = int(nb_steps/2)
-            print('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))
+            logger.info('Launching MCMC procedure with {} chains, {} steps and {} std_RW'.format(nb_chains, nb_steps, std_RW))
         
         if len(initial_point.shape) == 1:
             initial_point = np.tile(initial_point[np.newaxis], (nb_chains, 1))
 
         if adaptive:
-            print('with adaptive MCMC...')
+            logger.info('with adaptive MCMC...')
 
-        print('initial point for MCMC is {}'.format(initial_point))
+        logger.info('initial point for MCMC is {}'.format(initial_point))
 
         adaptive_proposal=None
         lkd_list = [self.evaluate(initial_point, sessions_id, clean_up_gpu_memory=False)]
@@ -139,16 +135,16 @@ class Model():
             if early_stop and (i > Nburn) and (i > nb_minimum):
                 R = self.inference_validated(np.array(params_list)[Nburn:])
                 self.R_list.append(R)
-                if i%100==0:
-                    print('Gelman-Rubin factor is {}'.format(R))
+                if i % 100 == 0:
+                    logger.info('Gelman-Rubin factor is {}'.format(R))
                 if np.all(np.abs(R - 1) < 0.15):
-                    print('Early stopping criteria was validated at step {}. R values are: {}'.format(i, R))
+                    logger.info('Early stopping criteria was validated at step {}. R values are: {}'.format(i, R))
                     break
 
             if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014
                 Gamma = (1/(i - Nburn + 1)**0.5)
                 if i==Nburn:
-                    print('Adaptive MCMC starting...')
+                    logger.info('Adaptive MCMC starting...')
                     from scipy.stats import multivariate_normal
                     params = np.array(params_list)[-int(Nburn/2):].reshape(-1, self.nb_params)
                     Mu = params.mean(axis=0)
@@ -171,27 +167,27 @@ class Model():
                 else:
                     param = params_list[-1].reshape(-1, self.nb_params)
                     Alpha_estimated = np.minimum((np.exp(log_alpha)), 1)#.mean()
-                    if i%100==0:
+                    if i % 100 == 0:
                         print('acceptance is {}'.format(np.mean(acc_ratios/i)))
                     Lambda = Lambda * np.exp(Gamma * (Alpha_estimated - AlphaStar))
                     Mu = Mu + Gamma * (param.mean(axis=0) - Mu)
                     Sigma = Sigma + Gamma * (np.cov(param.T) - Sigma)
 
-        print('final posterior_mean is {}'.format(np.array(params_list)[Nburn:].mean(axis=(0,1))))
-        acc_ratios = acc_ratios/i
-        if i==(nb_steps-1) and early_stop:
-            print('Warning : inference has not converged according to Gelman-Rubin')
+        logger.info('final posterior_mean is {}'.format(np.array(params_list)[Nburn:].mean(axis=(0,1))))
+        acc_ratios = acc_ratios / i
+        if i == (nb_steps - 1) and early_stop:
+            logger.info('Warning : inference has not converged according to Gelman-Rubin')
 
-        if self.use_gpu: # clean up gpu memory
+        if self.use_gpu:  # clean up gpu memory
             torch.cuda.empty_cache()
 
-        print('acceptance ratio is of {}. Careful, this ratio should be close to 0.234. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
+        logger.info('acceptance ratio is of {}. Careful, this ratio should be close to 0.234. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
         return np.array(params_list), np.array(lkd_list), np.array(self.R_list)
 
     def inference_validated(self, parameters, method='Gelman-Rubin'):
         # implements Gelman-Rubin test, e.g., https://bookdown.org/rdpeng/advstatcomp/monitoring-convergence.html#monte-carlo-standard-errors
-        if method!='Gelman-Rubin':
-            return NotImplemented
+        if method != 'Gelman-Rubin':
+            raise NotImplementedError
         nb_samples, nb_chains, _ = parameters.shape
         chain_mean = parameters.mean(axis=0)
         post_mean = chain_mean.mean(axis=0)        
@@ -286,7 +282,7 @@ class Model():
         Output:
             a saved pickle file with the posterior distribution       
         '''
-        if self.train_method=='MCMC':
+        if self.train_method == 'MCMC':
             std_RW = utils.look_up(kwargs, 'std_RW', self.std_RW)
             nb_chains = utils.look_up(kwargs, 'nb_chains', 4)
             nb_steps = utils.look_up(kwargs, 'nb_steps', None)
@@ -295,9 +291,9 @@ class Model():
             self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point, adaptive=adaptive)
             path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))
-            print('results of inference SAVED')
+            logger.info(f'results of inference SAVED in {path}')
         else:
-            return NotImplemented
+            raise NotImplementedError('train method not implemented')
 
     def load(self, sessions_id=None, path=None):
         '''
@@ -322,8 +318,8 @@ class Model():
                 [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb')) # to take out on longer term <- necessary for version continuity
                 pass
         else:
-            return NotImplemented('This is lot of things to change. I wanted to add gradient descent as a learning'
-                                  'feature but didn\'t around to doing it. And MCMC seems to work well and fast enough')
+            raise NotImplementedError('This is lot of things to change. I wanted to add gradient descent as a learning'
+                                      'feature but didn\'t around to doing it. And MCMC seems to work well and fast enough')
 
     def remove(self, sessions_id):
         '''
@@ -342,7 +338,7 @@ class Model():
             print('no results were saved')
 
     def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
-        return NotImplemented
+        raise NotImplementedError
 
     def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=False):        
         '''
@@ -487,7 +483,7 @@ class Model():
         if trial_types.startswith('reversals') or trial_types=='unbiased':
             assert(pLeft is not None), 'pLeft must be specified to obtain score on trials after reversals'
         if trial_types in ['all', '0_contrasts'] and pLeft is not None:
-            print('pLeft is obsolete for the trial_types specified!')
+            logger.info('pLeft is obsolete for the trial_types specified!')
 
         path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id],
                                 self.session_uuids[sessions_id_test], trial_types=trial_types)
@@ -495,8 +491,8 @@ class Model():
             os.remove(path)
         elif os.path.exists(path):
             [prior, loglkd, accuracy] = pickle.load(open(path, 'rb'))
-            print('saved score results found')
-            print('accuracy on test sessions: {}'.format(accuracy))
+            logger.info(f'loading previously saved score results {path}')
+            logger.info(f'accuracy on test sessions: {accuracy}')
             return loglkd, accuracy
 
         self.load(sessions_id)
@@ -507,16 +503,16 @@ class Model():
 
         if param is not None:
             raise NotImplementedError('The code is probably correct but should be sanity tested')
-            print('custom parameters: {}'.format(param))
+            logger.info('custom parameters: {}'.format(param))
             loglkd, priors = self.evaluate(param[np.newaxis], return_details=True, act=act, stim=stim, side=side)
             accuracy = np.exp(loglkd/np.sum(act!=0))
-            print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
+            logger.info('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
             return loglkd, accuracy
         else:
             signals = self._compute_signal(['prior', 'score'], act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types=trial_types, pLeft=pLeft)
             prior, loglkd, accuracy = signals['prior'], signals['llk'], signals['accuracy']
             pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
-            print('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
+            logger.info('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
         return loglkd, accuracy
 
     # act=self.actions; stim=self.stimuli; side=self.stim_side
@@ -535,14 +531,14 @@ class Model():
             if os.path.exists(path):
                 self.load(sessions_id)
             else:
-                print('call the load_or_train() function')
+                logger.info('call the load_or_train() function')
 
         if self.train_method=='MCMC': 
             assert(parameter_type in ['maximum_a_posteriori', 'posterior_mean', 'all']), 'parameter_type must be maximum_a_posteriori, posterior_mean or all'
         if self.train_method!='MCMC':
-            return NotImplemented
+            raise NotImplementedError
 
-        if parameter_type=='posterior_mean':
+        if parameter_type == 'posterior_mean':
             nb_steps = len(self.params_list)
             parameters_chosen = self.params_list[-int(nb_steps/2):].mean(axis=(0,1)) # int(nb_steps/2)
             return parameters_chosen
@@ -552,5 +548,3 @@ class Model():
             return parameters_chosen
         else:
             return self.params_list
-        
-
