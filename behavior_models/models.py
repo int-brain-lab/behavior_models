@@ -222,7 +222,7 @@ class ActionKernel(base_models.PriorModel):
 
     name = "actKernel"
 
-    def __init__(self, *args, single_zeta=None, **kwargs):
+    def __init__(self, *args, single_zeta=True, **kwargs):
         self.name = "actKernel" + "_single_zeta" * single_zeta
         self.single_zeta = single_zeta
         nb_params = 4 + (not single_zeta) * 1

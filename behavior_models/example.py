@@ -1,6 +1,7 @@
+import pickle
 import numpy as np
 from behavior_models import utils as but, models
-import pickle
+
 from one.api import ONE
 import brainbox.io.one as bbone
 from brainwidemap import bwm_query
@@ -15,7 +16,6 @@ except:
 BehaviorModel = models.StimulusKernel
 # ONE
 one = ONE(base_url="https://openalyx.internationalbrainlab.org")
-one.alyx.clear_rest_cache()
 bwm_df = bwm_query()
 sessions = bwm_df.eid.unique()
 

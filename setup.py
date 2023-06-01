@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
@@ -9,9 +9,9 @@ with open("requirements.txt") as f:
 
 setup(
     name='behavior_models',
-    version='0.1.0',
+    version='0.2.0',
     author='Charles Findling',
-    url='https://github.com/csmfindling/behavior_models',
+    url='https://github.com/int-brain-lab/behavior_models',
     long_description=long_description,
     install_requires=require,
 )

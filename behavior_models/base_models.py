@@ -39,7 +39,7 @@ class PriorModel(object):
         if train_method!='MCMC':
             raise NotImplementedError
         self.train_method = train_method
-        logger.setLevel('INFO') if verbose else logger.setLevel('WARNING')
+        logger.setLevel('DEBUG') if verbose else logger.setLevel('INFO')
         logger.info(f'Initializing {self.name} model')
 
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
@@ -58,7 +58,7 @@ class PriorModel(object):
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]
         else:
-            logger.info('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
+            logger.debug('Launching in pseudo-session mode. In this mode, you only have access to the compute_signal method')
         self.use_gpu = False
         self.device = torch.device("cpu")
 
@@ -107,7 +107,7 @@ class PriorModel(object):
         self.R_list = []
         params_list = [initial_point]
         acc_ratios = np.zeros([nb_chains])
-        for i in tqdm(range(int(nb_steps))):
+        for i in tqdm(range(int(nb_steps)), leave=False):
             if adaptive_proposal is None:
                 a, b = (self.lb_params - params_list[-1]) / std_RW, (self.ub_params - params_list[-1]) / std_RW
                 proposal = truncnorm.rvs(a, b, params_list[-1], std_RW)
@@ -141,7 +141,7 @@ class PriorModel(object):
                     logger.info('Early stopping criteria was validated at step {}. R values are: {}'.format(i, R))
                     break
 
-            if adaptive and i>=Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014
+            if adaptive and i >= Nburn: # Adaptive MCMC following Andrieu and Thoms 2008 or Baker 2014
                 Gamma = (1/(i - Nburn + 1)**0.5)
                 if i==Nburn:
                     logger.info('Adaptive MCMC starting...')
@@ -168,7 +168,7 @@ class PriorModel(object):
                     param = params_list[-1].reshape(-1, self.nb_params)
                     Alpha_estimated = np.minimum((np.exp(log_alpha)), 1)#.mean()
                     if i % 100 == 0:
-                        print('acceptance is {}'.format(np.mean(acc_ratios/i)))
+                        logger.info('acceptance is {}'.format(np.mean(acc_ratios/i)))
                     Lambda = Lambda * np.exp(Gamma * (Alpha_estimated - AlphaStar))
                     Mu = Mu + Gamma * (param.mean(axis=0) - Mu)
                     Sigma = Sigma + Gamma * (np.cov(param.T) - Sigma)
