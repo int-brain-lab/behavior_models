@@ -1,5 +1,6 @@
 import gc
 import subprocess
+from pathlib import Path
 
 import numpy as np
 from scipy.special import digamma, betainc, logsumexp
@@ -100,7 +101,7 @@ def build_path(
     for k in range(len(l_sessionuuids_train)):
         str_sessionuuids += "_{}".format(l_sessionuuids_train[k])
     if l_sessionuuids_test is None:
-        path = path_results_mouse.joinpath(f"train{format(str_sessionuuids)}.pkl")
+        path = Path(path_results_mouse).joinpath(f"train{format(str_sessionuuids)}.pkl")
         return path
     else:
         assert (
@@ -109,7 +110,7 @@ def build_path(
         str_sessionuuids_test = ""
         for k in range(len(l_sessionuuids_test)):
             str_sessionuuids_test += "_{}".format(l_sessionuuids_test[k])
-        path = path_results_mouse.joinpath(f"train{str_sessionuuids}_test{str_sessionuuids_test}_trialtype_{trial_types}.pkl")
+        path = Path(path_results_mouse).joinpath(f"train{str_sessionuuids}_test{str_sessionuuids_test}_trialtype_{trial_types}.pkl")
         return path
 
 

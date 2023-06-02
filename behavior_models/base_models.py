@@ -416,13 +416,11 @@ class PriorModel(object):
             nb_steps = len(self.params_list)
             parameters_chosen = self.params_list[-500:].mean(axis=(0,1))[np.newaxis]
         elif parameter_type=='maximum_a_posteriori':
-            if verbose:
-                print('Using MAP')
+            logger.debug('Using MAP')
             xmax, ymax = np.where(self.lkd_list==np.max(self.lkd_list))
             parameters_chosen = self.params_list[xmax[0], ymax[0]][np.newaxis]
         elif parameter_type=='whole_posterior':
-            if verbose:
-                print('Using whole posterior')
+            logger.debug('Using whole posterior')
             parameters_chosen = self.params_list[-500:].reshape(-1, self.nb_params)
         if len(act.shape)==1:
             act, stim, side = act[np.newaxis], stim[np.newaxis], side[np.newaxis]

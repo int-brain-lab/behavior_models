@@ -1,14 +1,12 @@
-import pickle
 import numpy as np
-from behavior_models import utils as but, models
+from behavior_models import models
 import pandas as pd
+from pathlib import Path
 
 from one.api import ONE
 import brainbox.io.one as bbone
 from brainwidemap import bwm_query
-import sys
 from iblutil.util import setup_logger
-import itertools
 
 logger = setup_logger('ibl', level='INFO')
 
@@ -88,5 +86,10 @@ outdf = pd.DataFrame(outlist,
                          "posterior_mean",
                          "session_uuids"])
 
-outdf.to_parquet(f'outdf_{subject_name}.parquet')
 
+outdf_expected = pd.read_parquet(Path(models.__file__).parent.joinpath('tests', f'outdf_{SUBJECT}.parquet'))
+
+## %%
+for k in outdf.columns:
+    print(k, outdf[k], outdf_expected[k])
+    print('')
