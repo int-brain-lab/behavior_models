@@ -32,3 +32,4 @@ class TestInstantiateModels(unittest.TestCase):
         stimulus_kernel = models.StimulusKernel(**kwargs)
         stimulus_kernel_4a = models.StimulusKernel_4alphas(**kwargs)
         optimal_bayes = models.OptimalBayesian(**kwargs)
+        #todo instantiate with the trials table

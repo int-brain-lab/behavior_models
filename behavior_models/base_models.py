@@ -43,6 +43,7 @@ class PriorModel(object):
         '''
         if train_method!='MCMC':
             raise NotImplementedError
+        self.verbose = verbose
         self.train_method = train_method
         logger.setLevel('DEBUG') if verbose else logger.setLevel('INFO')
         logger.info(f'Initializing {self.name} model')
@@ -58,7 +59,13 @@ class PriorModel(object):
             self.path_results_mouse.mkdir(parents=True, exist_ok=True)
         self.std_RW = std_RW
         if isinstance(df_trials, pd.DataFrame):
-            pass
+            # pivots the dataframe to have one column per session, and then create the nsessions x ntrials numpy arrays
+            df_regressors = utils.format_data(df_trials, return_dataframe=True).pivot(columns='eid')
+            self.actions, self.stimuli, self.stim_side = (
+                np.nan_to_num(df_regressors['actions'].values.T),
+                np.nan_to_num(df_regressors['stimuli'].values.T),
+                np.nan_to_num(df_regressors['stim_side'].values.T),
+            )
         else:
             self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
         if self.actions is not None:
@@ -275,8 +282,7 @@ class PriorModel(object):
 
         if os.path.exists(loadpath):
             self.load(path=loadpath)
-            if self.verbose:
-                print('results found and loaded')
+            logger.info(f'results found and loaded from {loadpath}')
         else:
             self.train(sessions_id, **kwargs)
 

@@ -26,34 +26,67 @@ assert nb_sessions >= 2  # at least 2 sessions
 
 
 logger.info(f'Loading {nb_sessions} sessions for subject {SUBJECT}')
-
+# todo repetition_bias should be a parameter
 # get the possible combinations for the cross validation
 combinations = np.lib.stride_tricks.sliding_window_view(np.tile(np.arange(nb_sessions), 2), nb_sessions)[:nb_sessions, :]
 training_sessions = combinations[:, :nb_sessions - 1]
 testing_sessions = combinations[:, - 1][:, np.newaxis]
 
-## %%
+
 df_trials  = []
-for eid in df_sessions.eid.unique():
+eids = df_sessions.eid.unique()
+for eid in eids:
     sl = bbone.SessionLoader(one, eid)
     sl.load_trials()
-    df_trials.append(but.format_data(sl.trials, return_dataframe=True))
-    break
-
-
-a = pd.concat(df_trials).pivot(columns='eid')
-
+    sl.trials['eid'] = eid
+    df_trials.append(sl.trials)
+df_trials = pd.concat(df_trials)
 
 my_model = models.ActionKernel(
     path_to_results="results_behavioral/",
-    session_uuids= df_sessions.eid.unique(),
+    session_uuids=eids,
     mouse_name=SUBJECT,
-    actions=np.nan_to_num(a['actions'].values.T),
-    stimuli=np.nan_to_num(a['stimuli'].values.T),
-    stim_side=np.nan_to_num(a['stim_side'].values.T),
+    df_trials=df_trials,
 )
+# training each iteration while leaving out one session to score
+outlist = []
+for idx_perm in range(len(training_sessions)):
+    logger.info(f"training session: {training_sessions[idx_perm]}, testing session: {testing_sessions[idx_perm]}")
+    my_model.load_or_train(sessions_id=training_sessions[idx_perm], remove_old=False, adaptive=True)
+    loglkd, acc = my_model.score(sessions_id_test=testing_sessions[idx_perm], sessions_id=training_sessions[idx_perm],
+                                 trial_types="all", remove_old=False)
+    outlist.append(
+        [
+            np.NaN,
+            idx_perm,
+            training_sessions[idx_perm].tolist(),
+            testing_sessions[idx_perm].tolist(),
+            SUBJECT,
+            nb_sessions,
+            my_model.name,
+            my_model.repetition_bias,
+            loglkd,
+            acc,
+            my_model.get_parameters(
+                parameter_type="posterior_mean"
+            ).tolist(),
+            eids.tolist(),
+        ]
+    )
 
-my_model.load_or_train(training_sessions[0])
+outdf = pd.DataFrame(outlist,
+               columns =["i_subj",
+                         "idx_perm",
+                         "training_sessions",
+                         "testing_sessions",
+                         "subject_name",
+                         "nb_sessions",
+                         "model_name",
+                         "with_repBias",
+                         "loglkd",
+                         "acc",
+                         "posterior_mean",
+                         "session_uuids"])
 
+outdf.to_parquet(f'outdf_{subject_name}.parquet')
 
-sl.trials

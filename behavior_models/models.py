@@ -222,7 +222,7 @@ class ActionKernel(base_models.PriorModel):
 
     name = "actKernel"
 
-    def __init__(self, *args, single_zeta=True, **kwargs):
+    def __init__(self, *args, single_zeta=True, repetition_bias=None, **kwargs):
         self.name = "actKernel" + "_single_zeta" * single_zeta
         self.single_zeta = single_zeta
         nb_params = 4 + (not single_zeta) * 1
@@ -236,6 +236,7 @@ class ActionKernel(base_models.PriorModel):
                 np.array([0.02, 0.02]),
             )
         )
+        self.repetition_bias = None  # this model can't have a repetition bias
         super(ActionKernel, self).__init__(*args, nb_params=nb_params, lb_params=lb_params, ub_params=ub_params,  std_RW=std_RW, **kwargs)
 
 

@@ -108,7 +108,7 @@ def build_path(
         ), "trial_types can not be None if l_sessionuuids_test is not None"
         str_sessionuuids_test = ""
         for k in range(len(l_sessionuuids_test)):
-            str_sessionuuids_test.joinpath(f"_{l_sessionuuids_test[k]}")
+            str_sessionuuids_test += "_{}".format(l_sessionuuids_test[k])
         path = path_results_mouse.joinpath(f"train{str_sessionuuids}_test{str_sessionuuids_test}_trialtype_{trial_types}.pkl")
         return path
 
@@ -251,7 +251,9 @@ def format_data(data, return_dataframe=False, eid=None):
         actions = pd.Series(dtype="float64").reindex_like(stim_side)
     pLeft_oracle = data["probabilityLeft"]
     if return_dataframe:
-        return pd.DataFrame(dict(stim_side=stim_side, stimuli=stimuli, actions=actions, pLeft_oracle=pLeft_oracle, eid=eid))
+        df_out = pd.DataFrame(dict(stim_side=stim_side, stimuli=stimuli, actions=actions,
+                                   pLeft_oracle=pLeft_oracle, eid=data.get('eid', eid)))
+        return df_out
     else:
         return (
             np.array(stim_side),
