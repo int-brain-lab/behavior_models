@@ -14,5 +14,5 @@ setup(
     url='https://github.com/int-brain-lab/behavior_models',
     long_description=long_description,
     install_requires=require,
-    packages=find_packages(),  # same as name
+    packages=['behavior_models'],  # same as name
 )
