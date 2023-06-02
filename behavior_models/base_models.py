@@ -3,6 +3,7 @@ from pathlib import Path
 import warnings, torch
 
 import numpy as np
+import pandas as pd
 from scipy.stats import truncnorm
 from tqdm import tqdm
 from scipy.special import logsumexp
@@ -17,7 +18,7 @@ class PriorModel(object):
     '''
     This class defines the shared methods across all models
     '''
-    def __init__(self, path_to_results=None, session_uuids=None, mouse_name=None, actions=None, stimuli=None,
+    def __init__(self, path_to_results=None, session_uuids=None, mouse_name=None, actions=None, stimuli=None, df_trials=None,
                  stim_side=None, nb_params=None, lb_params=None, ub_params=None, std_RW=0.02, train_method='MCMC', verbose=False):
         '''
         Params:
@@ -25,12 +26,16 @@ class PriorModel(object):
             path_to_results (String): path where results will be saved
             session_uuids (array of strings): session_uuid for each session
             mouse_name (string): name of mice
-            actions (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer 
-                at one trial, pad with 0. If the sessions have different number of trials, pad the last trials with 0.
-            stimuli (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have 
-                different number of trials, pad the last trials with 0.
-            stim_side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1). 
-                If the sessions have different number of trials, pad the last trials with 0.
+            regressors:
+            ---------------------
+                actions (nd array of size [nb_sessions, nb_trials]): actions performed by the mouse (-1/1). If the mouse did not answer
+                    at one trial, pad with 0. If the sessions have different number of trials, pad the last trials with 0.
+                stimuli (nd array of size [nb_sessions, nb_trials]): stimuli observed by the mouse (-1/1). If the sessions have
+                    different number of trials, pad the last trials with 0.
+                stim_side (nd array of size [nb_sessions, nb_trials]): stim_side of the stimuli observed by the mouse (-1/1).
+                    If the sessions have different number of trials, pad the last trials with 0.
+            --------------------- OR
+                df_trials (pandas dataframe): dataframe containing the trials information as per the ALF format session loader
             nb_params (int): nb of parameters of the model (these parameters will be inferred)
             lb_params (array of floats): lower bounds of parameters (e.g., if `nb_params=3`, np.array([0, 0, -np.inf]))
             ub_params (array of floats): upperboud bounds of parameters (e.g., if `nb_params=3`, np.array([1, 1, np.inf]))
@@ -52,8 +57,10 @@ class PriorModel(object):
         if not self.path_results_mouse.exists():
             self.path_results_mouse.mkdir(parents=True, exist_ok=True)
         self.std_RW = std_RW
-
-        self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
+        if isinstance(df_trials, pd.DataFrame):
+            pass
+        else:
+            self.actions, self.stimuli, self.stim_side = actions, stimuli, stim_side
         if self.actions is not None:
             if (len(self.actions.shape)==1):
                 self.actions, self.stimuli, self.stim_side = self.actions[np.newaxis], self.stimuli[np.newaxis], self.stim_side[np.newaxis]

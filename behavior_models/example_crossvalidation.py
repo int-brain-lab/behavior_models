@@ -37,10 +37,9 @@ df_trials  = []
 for eid in df_sessions.eid.unique():
     sl = bbone.SessionLoader(one, eid)
     sl.load_trials()
+    df_trials.append(but.format_data(sl.trials, return_dataframe=True))
+    break
 
-    side, stim, act, pLeft = but.format_data(sl.trials)
-    df_trials_ = pd.DataFrame(dict(side=side, stim=stim, act=act, pLeft=pLeft, eid=eid))
-    df_trials.append(df_trials_)
 
 a = pd.concat(df_trials).pivot(columns='eid')
 
@@ -49,9 +48,12 @@ my_model = models.ActionKernel(
     path_to_results="results_behavioral/",
     session_uuids= df_sessions.eid.unique(),
     mouse_name=SUBJECT,
-    actions=np.nan_to_num(a['act'].values.T),
-    stimuli=np.nan_to_num(a['stim'].values.T),
-    stim_side=np.nan_to_num(a['side'].values.T),
+    actions=np.nan_to_num(a['actions'].values.T),
+    stimuli=np.nan_to_num(a['stimuli'].values.T),
+    stim_side=np.nan_to_num(a['stim_side'].values.T),
 )
 
 my_model.load_or_train(training_sessions[0])
+
+
+sl.trials

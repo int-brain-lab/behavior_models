@@ -228,14 +228,18 @@ def perform_inference(stim_side, tau=60, gamma=0.8, lb=20, ub=100):
     return pLeft_inferred, marginal_blocktype, marginal_currentlength, priors, h
 
 
-def format_data(data, minimum_shape=None):
+def format_data(data, return_dataframe=False, eid=None):
+    """
+    From a trial table, returns the stimuli, actions, stim_side and pLeft_oracle arrays
+    :param data: trials dataframe from Session Loader or ALF loader
+    :param return_dataframe: (False), if true returns a dataframe
+    :param eid: (None), if labeled and Dataframe output is required, labeled a column with the eid
+    :return:
+    """
     if "feedbackType" in data.keys():
         stim_side = data["choice"] * (data["feedbackType"] == 1) - data["choice"] * (
             data["feedbackType"] == -1
         )
-        # stim_side = ((np.isnan(data['contrastLeft'])==False) * 1 - (np.isnan(data['contrastRight'])==False) * 1)
-        # if np.any((stim_side != stim_side_legacy) * (data['choice'] != 0)) and np.abs(stim_side).sum() != 0:
-        #    raise ValueError('there is a problem in the computation of the stim_side')
     else:
         stim_side = (np.isnan(data["contrastLeft"]) == False) * 1 - (
             np.isnan(data["contrastRight"]) == False
@@ -246,12 +250,15 @@ def format_data(data, minimum_shape=None):
     else:
         actions = pd.Series(dtype="float64").reindex_like(stim_side)
     pLeft_oracle = data["probabilityLeft"]
-    return (
-        np.array(stim_side),
-        np.array(stimuli),
-        np.array(actions),
-        np.array(pLeft_oracle),
-    )
+    if return_dataframe:
+        return pd.DataFrame(dict(stim_side=stim_side, stimuli=stimuli, actions=actions, pLeft_oracle=pLeft_oracle, eid=eid))
+    else:
+        return (
+            np.array(stim_side),
+            np.array(stimuli),
+            np.array(actions),
+            np.array(pLeft_oracle),
+        )
 
 
 def get_bwm_ins_alyx(one):
