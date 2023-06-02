@@ -1,3 +1,4 @@
+import abc
 import os, pickle
 from pathlib import Path
 import warnings, torch
@@ -14,7 +15,7 @@ from iblutil.util import setup_logger
 logger = setup_logger('ibl')
 
 
-class PriorModel(object):
+class PriorModel(abc.ABC):
     '''
     This class defines the shared methods across all models
     '''
@@ -251,11 +252,10 @@ class PriorModel(object):
             torch.cuda.empty_cache()
         return res            
 
+    @abc.abstractmethod
     def compute_lkd(arr_params, act, stim, side, return_details):
-        '''
-            Return the likelihood, this method must be defined in your descendant class
-        '''
-        return NotImplemented
+        ''' Return the likelihood, this method must be defined in your descendant class'''
+        pass
 
     def load_or_train(self, sessions_id=None, remove_old=False, loadpath=None, **kwargs):
         '''
@@ -426,7 +426,7 @@ class PriorModel(object):
             act, stim, side = act[np.newaxis], stim[np.newaxis], side[np.newaxis]
 
         output = self.evaluate(parameters_chosen, return_details=True, act=act, stim=stim, side=side)
-        loglkd, priors = output[0], output[1]
+        loglkd, priors = output[0].cpu(), output[1].cpu()
 
         returned = {}
         if signal == 'prior' or 'prior' in signal:

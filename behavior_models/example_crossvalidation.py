@@ -10,7 +10,6 @@ from iblutil.util import setup_logger
 
 logger = setup_logger('ibl', level='INFO')
 
-
 SUBJECT = 'NYU-45'
 model_kwargs = dict(single_zeta=True, repetition_bias=False)
 
@@ -40,7 +39,8 @@ for eid in eids:
     df_trials.append(sl.trials)
 df_trials = pd.concat(df_trials)
 
-my_model = models.ActionKernel(
+
+my_model = models.OptimalBayesian(
     path_to_results="results_behavioral/",
     session_uuids=eids,
     mouse_name=SUBJECT,
@@ -93,3 +93,15 @@ outdf_expected = pd.read_parquet(Path(models.__file__).parent.joinpath('tests', 
 for k in outdf.columns:
     print(k, outdf[k], outdf_expected[k])
     print('')
+
+
+
+
+a = my_model.compute_signal(parameter_type='posterior_mean')
+a['prior'].shape
+
+
+import torch
+import gc
+gc.collect()
+torch.cuda.empty_cache()
