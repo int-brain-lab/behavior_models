@@ -40,7 +40,7 @@ for eid in eids:
 df_trials = pd.concat(df_trials)
 
 
-my_model = models.OptimalBayesian(
+my_model = models.ActionKernel(
     path_to_results="results_behavioral/",
     session_uuids=eids,
     mouse_name=SUBJECT,
@@ -98,6 +98,10 @@ for k in outdf.columns:
 
 
 a = my_model.compute_signal(parameter_type='posterior_mean')
+
+params = my_model.get_parameters(parameter_type='posterior_mean')
+#learning rate, sensory noise, (lapse rate pos, lapse rate neg)
+# decay constant (1 / learning rate)
 a['prior'].shape
 
 

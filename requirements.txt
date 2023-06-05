@@ -1,4 +1,5 @@
 git+https://github.com/int-brain-lab/paper-brain-wide-map.git@main
+joblib
 numpy
 pandas
 scipy
