@@ -25,4 +25,4 @@ pip install -e .
 ```
 
 ## Usage
-The simplest is to run a behaviour model on a single session as in the [example_single_session.py](example_single_session.py) file.
+The simplest is to run a behaviour model on a single session as in the [example_single_session.py](./behavior_models/example_single_session.py) file.
