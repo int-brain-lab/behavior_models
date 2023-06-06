@@ -1,13 +1,16 @@
 import abc
-import os, pickle
+import gc
+import os
 from pathlib import Path
-import warnings, torch
+import pickle
+import warnings
 
 import numpy as np
 import pandas as pd
 from scipy.stats import truncnorm
 from tqdm import tqdm
 from scipy.special import logsumexp
+import torch
 
 from behavior_models import utils
 from iblutil.util import setup_logger
@@ -16,12 +19,13 @@ logger = setup_logger('ibl')
 
 
 class PriorModel(abc.ABC):
+    train_method = 'MCMC'
     '''
-    This class defines the shared methods across all models
+    This class defines the shared methods across all behavior models
     '''
-    def __init__(self, path_to_results=None, session_uuids=None, mouse_name=None, actions=None, stimuli=None, df_trials=None,
-                 stim_side=None, nb_params=None, lb_params=None, ub_params=None, std_RW=0.02, train_method='MCMC', verbose=False):
-        '''
+    def __init__(self, path_to_results=None, session_uuids=None, mouse_name="", actions=None, stimuli=None, df_trials=None,
+                 stim_side=None, nb_params=None, lb_params=None, ub_params=None, std_RW=0.02, verbose=False):
+        """
         Params:
             name (String): name of the model
             path_to_results (String): path where results will be saved
@@ -41,14 +45,11 @@ class PriorModel(abc.ABC):
             lb_params (array of floats): lower bounds of parameters (e.g., if `nb_params=3`, np.array([0, 0, -np.inf]))
             ub_params (array of floats): upperboud bounds of parameters (e.g., if `nb_params=3`, np.array([1, 1, np.inf]))
             train_method (string): inference method (only MCMC is possible for the moment, and forever?)
-        '''
-        if train_method!='MCMC':
-            raise NotImplementedError
+        """
         self.verbose = verbose
-        self.train_method = train_method
         logger.setLevel('DEBUG') if verbose else logger.setLevel('INFO')
-        logger.info(f'Initializing {self.name} model')
-
+        logger.debug(f'Instantiating {self.name} model')
+        session_uuids = [session_uuids] if isinstance(session_uuids, str) else session_uuids
         self.session_uuids = np.array([session_uuids[k].split('-')[0] for k in range(len(session_uuids))])
         assert(len(np.unique(self.session_uuids)) == len(self.session_uuids)), 'there is a problem in the session formatting. Contact Charles Findling'
 
@@ -77,6 +78,7 @@ class PriorModel(abc.ABC):
         self.use_gpu = False
         self.device = torch.device("cpu")
 
+
     def mcmc(self, sessions_id, std_RW, nb_chains, nb_steps, initial_point, adaptive=True):
         '''
         Perform with inference MCMC
@@ -89,6 +91,7 @@ class PriorModel(abc.ABC):
             initial_point (array of float of size nb_params): gives the initial_point for all chains of MCMC. All chains
                 start from the same point
         '''
+        np.random.seed(4873)
         if initial_point is None:
             if np.any(np.isinf(self.lb_params)) or np.any(np.isinf(self.ub_params)):
                 assert(False), 'because your bounds are infinite, an initial_point must be specified'
@@ -194,6 +197,7 @@ class PriorModel(abc.ABC):
             logger.info('Warning : inference has not converged according to Gelman-Rubin')
 
         if self.use_gpu:  # clean up gpu memory
+            gc.collect()
             torch.cuda.empty_cache()
 
         logger.info('acceptance ratio is of {}. Careful, this ratio should be close to 0.234. If not, change the standard deviation of the random walk'.format(acc_ratios.mean()))
@@ -272,7 +276,7 @@ class PriorModel(abc.ABC):
 
         if (sessions_id is None) and (loadpath is None):
             sessions_id = np.arange(len(self.session_uuids))
-            assert(len(self.session_uuids)==len(self.actions))
+            assert(len(self.session_uuids) == len(self.actions))
 
         if remove_old:
             self.remove(sessions_id)
@@ -281,7 +285,7 @@ class PriorModel(abc.ABC):
             loadpath = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
 
         if os.path.exists(loadpath):
-            self.load(path=loadpath)
+            self._load(path=loadpath)
             logger.info(f'results found and loaded from {loadpath}')
         else:
             self.train(sessions_id, **kwargs)
@@ -308,7 +312,7 @@ class PriorModel(abc.ABC):
         else:
             raise NotImplementedError('train method not implemented')
 
-    def load(self, sessions_id=None, path=None):
+    def _load(self, sessions_id=None, path=None):
         '''
         Load method. This method should not be called directly. Call the load_or_train() method instead
         Params:
@@ -321,18 +325,13 @@ class PriorModel(abc.ABC):
             raise ValueError('sessions_id and path can not both be None')
         if (sessions_id is not None) and (path is not None):
             raise ValueError('sessions_id and path can not both be not None')
-
-        if self.train_method=='MCMC':
-            if path is None:
-                path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
-            try:
-                [self.params_list, self.lkd_list, self.Rlist] = pickle.load(open(path, 'rb'))
-            except:
-                [self.params_list, self.lkd_list] = pickle.load(open(path, 'rb')) # to take out on longer term <- necessary for version continuity
-                pass
-        else:
-            raise NotImplementedError('This is lot of things to change. I wanted to add gradient descent as a learning'
-                                      'feature but didn\'t around to doing it. And MCMC seems to work well and fast enough')
+        if path is None:
+            path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
+        training_weights = pickle.load(open(path, 'rb'))
+        if len(training_weights) == 3:
+            [self.params_list, self.lkd_list, self.Rlist] = training_weights
+        elif len(training_weights) == 2:  # backward compatibility
+            [self.params_list, self.lkd_list] = training_weights
 
     def remove(self, sessions_id):
         '''
@@ -350,8 +349,12 @@ class PriorModel(abc.ABC):
         else:
             print('no results were saved')
 
-    def compute_prediction_error(self, act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior'):
-        raise NotImplementedError
+    def predict_trials(self):
+        # TODO implement for multiple sessions
+        res = self.compute_signal(parameter_type='posterior_mean', signal=['prior', 'prediction_error'])
+        pe = np.array(res['prediction_error']).squeeze()
+        return pd.DataFrame({'prior': res['prior'], 'prediction_error_left': pe[0], 'prediction_error_right': pe[1]})
+
 
     def compute_signal(self, signal='prior', act=None, stim=None, side=None, sessions_id=None, parameter_type='whole_posterior', verbose=False):        
         '''
@@ -401,7 +404,7 @@ class PriorModel(abc.ABC):
                 sessions_id = np.arange(len(self.session_uuids))
             path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             if os.path.exists(path):
-                self.load(sessions_id)
+                self._load(sessions_id)
             else:
                 raise ValueError('the model has not be trained')
 
@@ -506,7 +509,7 @@ class PriorModel(abc.ABC):
             logger.info(f'accuracy on test sessions: {accuracy}')
             return loglkd, accuracy
 
-        self.load(sessions_id)
+        self._load(sessions_id)
         act, stim, side = self.actions[sessions_id_test], self.stimuli[sessions_id_test], self.stim_side[sessions_id_test]
 
         if pLeft is not None:
@@ -540,7 +543,7 @@ class PriorModel(abc.ABC):
                 sessions_id = np.arange(len(self.actions))
             path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
             if os.path.exists(path):
-                self.load(sessions_id)
+                self._load(sessions_id)
             else:
                 logger.info('call the load_or_train() function')
 

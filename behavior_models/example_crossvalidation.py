@@ -30,7 +30,8 @@ training_sessions = combinations[:, :nb_sessions - 1]
 testing_sessions = combinations[:, - 1][:, np.newaxis]
 
 
-df_trials  = []
+# loop over the sessions and load the trials for each in a single dataframe
+df_trials = []
 eids = df_sessions.eid.unique()
 for eid in eids:
     sl = bbone.SessionLoader(one, eid)
@@ -38,7 +39,6 @@ for eid in eids:
     sl.trials['eid'] = eid
     df_trials.append(sl.trials)
 df_trials = pd.concat(df_trials)
-
 
 my_model = models.ActionKernel(
     path_to_results="results_behavioral/",
@@ -72,6 +72,7 @@ for idx_perm in range(len(training_sessions)):
         ]
     )
 
+
 outdf = pd.DataFrame(outlist,
                columns =["i_subj",
                          "idx_perm",
@@ -97,15 +98,34 @@ for k in outdf.columns:
 
 
 
-a = my_model.compute_signal(parameter_type='posterior_mean')
+
+
 
 params = my_model.get_parameters(parameter_type='posterior_mean')
 #learning rate, sensory noise, (lapse rate pos, lapse rate neg)
 # decay constant (1 / learning rate)
 a['prior'].shape
 
-
 import torch
 import gc
 gc.collect()
 torch.cuda.empty_cache()
+
+
+##
+
+import pickle
+a = pickle.load(open("/datadisk/Data/behavior_models/CSHL059/model_actKernel_single_zeta_/train_32364bd4.pkl", 'rb'))
+
+# 0 chaines MCMC (niter, nchaines, npar)
+# 1 likelihoods (niter, nchaines)
+# 2 posterioir mean (1, npar)
+# self.params_list, self.lkd_list, self.Rlist
+
+##
+
+import joblib
+joblib.dump(my_model, '/datadisk/Data/behavior_models/toto_model.pkl')
+
+new_model = joblib.load('/datadisk/Data/behavior_models/toto_model.pkl')
+params = new_model.get_parameters(parameter_type='posterior_mean')
