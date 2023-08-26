@@ -8,11 +8,36 @@ from torch.distributions.normal import Normal
 unsqueeze = lambda x: torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
 
-def compute_logp_ch_and_pe(values, stim, act, side, zetas, lapses, repetition_bias):
+def compute_logp_ch_and_pe(
+    values,
+    stim,
+    act,
+    side,
+    zetas,
+    lapses,
+    repetition_bias,
+    return_terms_independently=False,
+    biased_version=False,
+    prior_and_biased_weights=None,
+):
+    if repetition_bias is not None and not biased_version:
+        raise AssertionError(
+            "repetition can not be specified if biased_version is false. This case is not supported"
+        )
+
     values = torch.clamp(values, min=1e-7, max=1 - 1e-7)
-    pLeft = combine_lkd_prior(stim, zetas, values)
+    pLeft = combine_lkd_prior(
+        stim, zetas, values if not biased_version else torch.ones_like(values) * 0.5
+    )
     pRight = 1 - pLeft
     pActions = torch.stack((pRight / (pRight + pLeft), pLeft / (pRight + pLeft)))
+
+    if prior_and_biased_weights is not None:
+        pLeft_ = combine_lkd_prior(stim, zetas, torch.ones_like(values) * 0.5)
+        pRight_ = 1 - pLeft
+        pActions_ = torch.stack(
+            (pRight_ / (pRight_ + pLeft_), pLeft_ / (pRight_ + pLeft_))
+        )
 
     belief = pActions[0] * (torch.unsqueeze(act, 1) == -1) + pActions[1] * (
         torch.unsqueeze(act, 1) == 1
@@ -20,7 +45,8 @@ def compute_logp_ch_and_pe(values, stim, act, side, zetas, lapses, repetition_bi
     correct = (act == side) * 1
     prediction_error = torch.unsqueeze(correct, 1) - belief
 
-    unsqueezed_lapses = torch.unsqueeze(lapses, 0)
+    if not biased_version:
+        unsqueezed_lapses = torch.unsqueeze(lapses, 0)
 
     # dimension are (left/right x nb_sessions x nb_chains x nb_trials)
     if repetition_bias is not None:
@@ -40,8 +66,25 @@ def compute_logp_ch_and_pe(values, stim, act, side, zetas, lapses, repetition_bi
                 torch.stack(((act[:, :-1] == -1) * 1, (act[:, :-1] == 1) * 1)), 2
             )
         )
-    else:
+    elif not biased_version and (prior_and_biased_weights is None):
         pActions = pActions * (1 - unsqueezed_lapses) + unsqueezed_lapses / 2.0
+    elif prior_and_biased_weights is None:
+        lapse, bias = lapses
+        unsqueezed_lapses = lapse[None, None, :, None]
+        unsqueezed_bias = bias[None, None, :, None]
+        pActions = (
+            pActions * (1 - unsqueezed_bias - unsqueezed_lapses)
+            + unsqueezed_lapses / 2.0
+            + unsqueezed_bias * torch.stack((1 - values, values), 0)
+        )
+    else:
+        w1, w2 = prior_and_biased_weights
+        pActions = unsqueezed_lapses / 2.0 + (1 - unsqueezed_lapses) * (
+            w1[None, None, :, None] * pActions
+            + w2[None, None, :, None] * pActions_
+            + (1 - w2[None, None, :, None] - w1[None, None, :, None])
+            * torch.stack((1 - values, values), 0)
+        )
 
     p_ch = (
         pActions[0] * (torch.unsqueeze(act, 1) == -1)

@@ -4,7 +4,7 @@ import numpy as np
 from behavior_models.models import utils as mut
 from iblutil.util import setup_logger
 
-logger = setup_logger('ibl')
+logger = setup_logger("ibl")
 
 
 class optimal_Bayesian(model.Model):
@@ -50,7 +50,7 @@ class optimal_Bayesian(model.Model):
 
         self.with_unbiased = with_unbiased
         self.single_lapserate = single_lapserate
-        
+
         super().__init__(
             name,
             path_to_results,
@@ -137,7 +137,7 @@ class optimal_Bayesian(model.Model):
             lapses, zetas = mut.get_parameters(
                 lapse_pos, lapse_pos, side, zeta_pos, zeta_neg
             )
-        else:            
+        else:
             lapses, zetas = mut.get_parameters(
                 lapse_pos, lapse_neg, side, zeta_pos, zeta_neg
             )
@@ -185,28 +185,43 @@ class optimal_Bayesian(model.Model):
             ]
         ).T
         to_update = torch.unsqueeze(torch.unsqueeze(act != 0, -1), -1) * 1
-        
-        for i_trial in range(act.shape[-1]):            
-            if (i_trial > 0 and not self.with_unbiased) or (self.with_unbiased and i_trial > 90):
+
+        for i_trial in range(act.shape[-1]):
+            if (i_trial > 0 and not self.with_unbiased) or (
+                self.with_unbiased and i_trial > 90
+            ):
                 alpha[:, :, i_trial] = torch.sum(
                     torch.unsqueeze(h, -1) * transition, axis=2
                 ) * to_update[:, i_trial - 1] + alpha[:, :, i_trial - 1] * (
                     1 - to_update[:, i_trial - 1]
                 )
-            elif (self.with_unbiased and i_trial == 90):
+            elif self.with_unbiased and i_trial == 90:
                 alpha = torch.zeros(
-                    [nb_sessions, nb_chains, act.shape[-1], self.nb_blocklengths, self.nb_typeblocks],
-                    device=self.device, dtype=torch.float32)
-                alpha[:, :, :i_trial, 0, 1] = 1.0                
+                    [
+                        nb_sessions,
+                        nb_chains,
+                        act.shape[-1],
+                        self.nb_blocklengths,
+                        self.nb_typeblocks,
+                    ],
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+                alpha[:, :, :i_trial, 0, 1] = 1.0
                 alpha[:, :, i_trial, 0, 0] = 0.5
                 alpha[:, :, i_trial, 0, -1] = 0.5
-                alpha = alpha.reshape(nb_sessions, nb_chains, -1, self.nb_typeblocks * self.nb_blocklengths)
+                alpha = alpha.reshape(
+                    nb_sessions,
+                    nb_chains,
+                    -1,
+                    self.nb_typeblocks * self.nb_blocklengths,
+                )
             elif self.with_unbiased:
                 alpha[:, :, i_trial] = alpha[:, :, i_trial - 1]
             h = alpha[:, :, i_trial] * torch.unsqueeze(lks[i_trial], 1).repeat(
                 1, 1, self.nb_blocklengths
-            )                
-            
+            )
+
             h = h / torch.unsqueeze(torch.sum(h, axis=-1), -1)
 
         predictive = torch.sum(
