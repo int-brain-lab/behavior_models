@@ -56,7 +56,7 @@ class PriorModel(abc.ABC):
         self.path_to_results = Path(path_to_results)
         self.lb_params, self.ub_params, self.nb_params = lb_params, ub_params, nb_params
         self.mouse_name = mouse_name
-        self.path_results_mouse = self.path_to_results.joinpath(self.mouse_name, f'model_{self.name}_')
+        self.path_results_mouse = self.path_to_results.joinpath(self.mouse_name, f'model_{self.name}')
         if not self.path_results_mouse.exists():
             self.path_results_mouse.mkdir(parents=True, exist_ok=True)
         self.std_RW = std_RW
