@@ -307,7 +307,8 @@ class PriorModel(abc.ABC):
             adaptive = utils.look_up(kwargs, 'adaptive', True)
             self.params_list, self.lkd_list, self.Rlist = self.mcmc(sessions_id, std_RW=std_RW, nb_chains=nb_chains, nb_steps=nb_steps, initial_point=initial_point, adaptive=adaptive)
             path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
-            pickle.dump([self.params_list, self.lkd_list, self.Rlist], open(path, 'wb'))
+            with open(path, 'wb') as fb:
+                pickle.dump([self.params_list, self.lkd_list, self.Rlist], fb)
             logger.info(f'results of inference SAVED in {path}')
         else:
             raise NotImplementedError('train method not implemented')
@@ -327,7 +328,8 @@ class PriorModel(abc.ABC):
             raise ValueError('sessions_id and path can not both be not None')
         if path is None:
             path = utils.build_path(self.path_results_mouse, self.session_uuids[sessions_id])
-        training_weights = pickle.load(open(path, 'rb'))
+        with open(path, 'rb') as fb:
+            training_weights = pickle.load(fb)
         if len(training_weights) == 3:
             [self.params_list, self.lkd_list, self.Rlist] = training_weights
         elif len(training_weights) == 2:  # backward compatibility
@@ -504,7 +506,8 @@ class PriorModel(abc.ABC):
         if (remove_old or param is not None) and os.path.exists(path):
             os.remove(path)
         elif os.path.exists(path):
-            [prior, loglkd, accuracy] = pickle.load(open(path, 'rb'))
+            with open(path, 'rb') as fb:
+                [prior, loglkd, accuracy] = pickle.load(fb)
             logger.info(f'loading previously saved score results {path}')
             logger.info(f'accuracy on test sessions: {accuracy}')
             return loglkd, accuracy
@@ -525,7 +528,8 @@ class PriorModel(abc.ABC):
         else:
             signals = self._compute_signal(['prior', 'score'], act, stim, side, sessions_id=sessions_id, parameter_type=parameter_type, trial_types=trial_types, pLeft=pLeft)
             prior, loglkd, accuracy = signals['prior'], signals['llk'], signals['accuracy']
-            pickle.dump([prior, loglkd, accuracy], open(path, 'wb'))
+            with open(path, 'wb') as fb:
+                pickle.dump([prior, loglkd, accuracy], fb)
             logger.info('accuracy on {} test sessions: {}'.format(trial_types, accuracy))
         return loglkd, accuracy
 

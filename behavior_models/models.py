@@ -373,7 +373,7 @@ class ActionKernel(base_models.PriorModel):
             act_sim[t] = 2 * (torch.rand(nb_simul) < pActions[1]) - 1
 
         correct = act_sim == side[:, None]
-        correct = np.array(correct, dtype=np.float)
+        correct = np.array(correct, dtype=float)
         perf = np.nanmean(correct, axis=(0,))
 
         if only_perf:

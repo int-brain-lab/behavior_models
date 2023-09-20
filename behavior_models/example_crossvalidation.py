@@ -115,7 +115,8 @@ torch.cuda.empty_cache()
 ##
 
 import pickle
-a = pickle.load(open("/datadisk/Data/behavior_models/CSHL059/model_actKernel_single_zeta_/train_32364bd4.pkl", 'rb'))
+with open("/datadisk/Data/behavior_models/CSHL059/model_actKernel_single_zeta_/train_32364bd4.pkl", 'rb') as fb:
+    a = pickle.load(fb)
 
 # 0 chaines MCMC (niter, nchaines, npar)
 # 1 likelihoods (niter, nchaines)
