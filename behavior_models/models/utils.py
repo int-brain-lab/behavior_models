@@ -19,10 +19,11 @@ def compute_logp_ch_and_pe(
     return_terms_independently=False,
     biased_version=False,
     prior_and_biased_weights=None,
+    choice_trace=None
 ):
-    if repetition_bias is not None and not biased_version:
+    if repetition_bias is not None and biased_version:
         raise AssertionError(
-            "repetition can not be specified if biased_version is false. This case is not supported"
+            "repetition can not be specified if biased_version is True. This case is not supported"
         )
 
     values = torch.clamp(values, min=1e-7, max=1 - 1e-7)
@@ -62,9 +63,9 @@ def compute_logp_ch_and_pe(
             * (1 - unsqueezed_lapses[:, :, :, 1:] - unsqueezed_rep_bias)
             + unsqueezed_lapses[:, :, :, 1:] / 2.0
             + unsqueezed_rep_bias
-            * torch.unsqueeze(
+            * (torch.unsqueeze(
                 torch.stack(((act[:, :-1] == -1) * 1, (act[:, :-1] == 1) * 1)), 2
-            )
+            ) if choice_trace is None else choice_trace.T.swapaxes(1, -1)[:, :, :, 1:])
         )
     elif not biased_version and (prior_and_biased_weights is None):
         pActions = pActions * (1 - unsqueezed_lapses) + unsqueezed_lapses / 2.0
@@ -80,10 +81,7 @@ def compute_logp_ch_and_pe(
     else:
         w1, w2 = prior_and_biased_weights
         pActions = unsqueezed_lapses / 2.0 + (1 - unsqueezed_lapses) * (
-            w1[None, None, :, None] * pActions
-            + w2[None, None, :, None] * pActions_
-            + (1 - w2[None, None, :, None] - w1[None, None, :, None])
-            * torch.stack((1 - values, values), 0)
+            w1[None, None, :, None] * pActions + (1 - w1)[None, None, :, None] * pActions_
         )
 
     p_ch = (

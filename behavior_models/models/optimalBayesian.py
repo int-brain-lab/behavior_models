@@ -6,6 +6,7 @@ from iblutil.util import setup_logger
 
 logger = setup_logger("ibl")
 
+unsqueeze = lambda x: torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
 class optimal_Bayesian(model.Model):
     """
@@ -26,6 +27,7 @@ class optimal_Bayesian(model.Model):
         repetition_bias=False,
         with_unbiased=False,
         single_lapserate=False,
+        with_choice_trace=False,
     ):
         name = (
             "optimal_bayesian"
@@ -33,7 +35,12 @@ class optimal_Bayesian(model.Model):
             + "_single_zeta" * single_zeta
             + "_with_unbiased" * with_unbiased
             + "_single_lapserate" * single_lapserate
+            + "_with_choiceTrace" * with_choice_trace
         )
+        if with_choice_trace:
+            if (not repetition_bias) or with_unbiased or single_lapserate or (not single_zeta):
+                raise AssertionError('repBias must be True if choice trace is True')
+
         self.single_zeta = single_zeta
         nb_params = 3 + (not single_zeta) * 1
         lb_params, ub_params = np.zeros(nb_params), np.concatenate(
@@ -44,6 +51,12 @@ class optimal_Bayesian(model.Model):
         )
         self.repetition_bias = repetition_bias
         if repetition_bias:
+            lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, 0.5)
+            std_RW = np.append(std_RW, 0.01)
+            nb_params += 1
+
+        self.with_choice_trace = with_choice_trace
+        if with_choice_trace:
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, 0.5)
             std_RW = np.append(std_RW, 0.01)
             nb_params += 1
@@ -85,7 +98,11 @@ class optimal_Bayesian(model.Model):
             prior (array of shape [nb_sessions, nb_chains, nb_trials]): prior for each chain and session
         """
         nb_chains = len(arr_params)
-        if not self.repetition_bias and self.single_zeta:
+        if self.with_choice_trace:
+            zeta, lapse_pos, lapse_neg, rep_bias, choice_trace_lr = torch.tensor(
+                arr_params, device=self.device, dtype=torch.float32
+            ).T
+        elif not self.repetition_bias and self.single_zeta:
             zeta, lapse_pos, lapse_neg = torch.tensor(
                 arr_params, device=self.device, dtype=torch.float32
             ).T
@@ -186,6 +203,9 @@ class optimal_Bayesian(model.Model):
         ).T
         to_update = torch.unsqueeze(torch.unsqueeze(act != 0, -1), -1) * 1
 
+        if self.with_choice_trace:
+            choice_trace = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2]) + 0.5
+
         for i_trial in range(act.shape[-1]):
             if (i_trial > 0 and not self.with_unbiased) or (
                 self.with_unbiased and i_trial > 90
@@ -195,6 +215,13 @@ class optimal_Bayesian(model.Model):
                 ) * to_update[:, i_trial - 1] + alpha[:, :, i_trial - 1] * (
                     1 - to_update[:, i_trial - 1]
                 )
+                if self.with_choice_trace:
+                    a_prev = torch.stack([act[:, i_trial - 1] == -1, act[:, i_trial - 1] == 1]) * 1
+                    choice_trace[act[:, i_trial - 1] != 0, :, i_trial] = (1 - mut.unsqueeze(choice_trace_lr)) * choice_trace[
+                        act[:, i_trial - 1] != 0, :, i_trial - 1
+                    ] + mut.unsqueeze(choice_trace_lr) * torch.unsqueeze(a_prev.T[act[:, i_trial - 1] != 0], 1)
+                    choice_trace[act[:, i_trial - 1] == 0, :, i_trial] = choice_trace[act[:, i_trial - 1] == 0, :, i_trial - 1]
+
             elif self.with_unbiased and i_trial == 90:
                 alpha = torch.zeros(
                     [
@@ -244,6 +271,7 @@ class optimal_Bayesian(model.Model):
             zetas,
             lapses,
             (None if not self.repetition_bias else rep_bias),
+            choice_trace=None if not self.with_choice_trace else choice_trace,
         )
         priors = 1 - torch.tensor(Pis.detach(), device="cpu")
 
