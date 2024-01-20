@@ -1,7 +1,7 @@
-from behavior_models import model
+from behavior_models.models import model
 import torch
 import numpy as np
-from behavior_models import utils as mut
+from behavior_models.models import utils as mut
 
 
 class expSmoothing_stimside_4alphas(model.Model):
@@ -19,12 +19,18 @@ class expSmoothing_stimside_4alphas(model.Model):
         stim_side,
         single_zeta=True,
         repetition_bias=False,
+        with_choice_trace=False,
     ):
         name = (
             "expSmoothingStimSides_4alphas"
             + "_with_repBias" * repetition_bias
             + "_single_zeta" * single_zeta
+            + "_with_choiceTrace" * with_choice_trace
         )
+        if with_choice_trace:
+            if (not repetition_bias) or (not single_zeta):
+                raise AssertionError('repBias must be True if choice trace is True')
+
         if single_zeta:
             nb_params, lb_params, ub_params = (
                 7,
@@ -45,6 +51,12 @@ class expSmoothing_stimside_4alphas(model.Model):
             nb_params += 1
             lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, 0.5)
             std_RW = np.append(std_RW, 0.01)
+        self.with_choice_trace = with_choice_trace
+        if with_choice_trace:
+            lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, 0.5)
+            std_RW = np.append(std_RW, 0.01)
+            nb_params += 1
+
         super().__init__(
             name,
             path_to_results,
@@ -61,7 +73,19 @@ class expSmoothing_stimside_4alphas(model.Model):
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
         nb_chains = len(arr_params)
-        if not self.repetition_bias and not self.single_zeta:
+        if self.with_choice_trace:
+            (
+                alpha_ch_rew,
+                alpha_ch_unrew,
+                alpha_unch_rew,
+                alpha_unch_unrew,
+                zeta,
+                lapse_pos,
+                lapse_neg,
+                rep_bias,
+                choice_trace_lr,
+            ) = torch.tensor(arr_params, dtype=torch.float32).T
+        elif not self.repetition_bias and not self.single_zeta:
             (
                 alpha_ch_rew,
                 alpha_ch_unrew,
@@ -71,8 +95,8 @@ class expSmoothing_stimside_4alphas(model.Model):
                 zeta_neg,
                 lapse_pos,
                 lapse_neg,
-            ) = torch.tensor(arr_params).T
-        if not self.single_zeta and self.repetition_bias:
+            ) = torch.tensor(arr_params, dtype=torch.float32).T
+        elif not self.single_zeta and self.repetition_bias:
             (
                 alpha_ch_rew,
                 alpha_ch_unrew,
@@ -83,8 +107,8 @@ class expSmoothing_stimside_4alphas(model.Model):
                 lapse_pos,
                 lapse_neg,
                 rep_bias,
-            ) = torch.tensor(arr_params).T
-        if self.single_zeta and not self.repetition_bias:
+            ) = torch.tensor(arr_params, dtype=torch.float32).T
+        elif self.single_zeta and not self.repetition_bias:
             (
                 alpha_ch_rew,
                 alpha_ch_unrew,
@@ -93,8 +117,8 @@ class expSmoothing_stimside_4alphas(model.Model):
                 zeta,
                 lapse_pos,
                 lapse_neg,
-            ) = torch.tensor(arr_params).T
-        if self.single_zeta and self.repetition_bias:
+            ) = torch.tensor(arr_params, dtype=torch.float32).T
+        elif self.single_zeta and self.repetition_bias:
             (
                 alpha_ch_rew,
                 alpha_ch_unrew,
@@ -104,7 +128,7 @@ class expSmoothing_stimside_4alphas(model.Model):
                 lapse_pos,
                 lapse_neg,
                 rep_bias,
-            ) = torch.tensor(arr_params).T
+            ) = torch.tensor(arr_params, dtype=torch.float32).T
         act, stim, side = torch.tensor(act), torch.tensor(stim), torch.tensor(side)
         nb_sessions = len(act)
 
@@ -112,6 +136,9 @@ class expSmoothing_stimside_4alphas(model.Model):
             torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float64)
             + 0.5
         )
+
+        if self.with_choice_trace:
+            choice_trace = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2]) + 0.5
 
         if self.single_zeta:
             zeta_pos, zeta_neg = zeta, zeta
@@ -150,8 +177,18 @@ class expSmoothing_stimside_4alphas(model.Model):
                 )
                 values[act[:, t - 1] == 0, :, t] = values[act[:, t - 1] == 0, :, t - 1]
 
+                # choice trace update
+                if self.with_choice_trace:
+                    a_prev = torch.stack([act[:, t - 1] == -1, act[:, t - 1] == 1]) * 1
+                    choice_trace[act[:, t - 1] != 0, :, t] = (1 - mut.unsqueeze(choice_trace_lr)) * choice_trace[
+                        act[:, t - 1] != 0, :, t - 1
+                    ] + mut.unsqueeze(choice_trace_lr) * torch.unsqueeze(a_prev.T[act[:, t - 1] != 0], 1)
+                    choice_trace[act[:, t - 1] == 0, :, t] = choice_trace[act[:, t - 1] == 0, :, t - 1]
+
+        rep_bias = None if not self.repetition_bias else rep_bias
         logp_ch, pActions, prediction_error = mut.compute_logp_ch_and_pe(
-            values[:, :, :, 1], stim, act, side, zetas, lapses, repetition_bias=None
+            values[:, :, :, 1], stim, act, side, zetas, lapses, rep_bias,
+            choice_trace=None if not self.with_choice_trace else choice_trace,
         )
 
         if return_details:

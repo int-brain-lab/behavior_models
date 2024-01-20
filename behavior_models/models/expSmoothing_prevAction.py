@@ -21,8 +21,14 @@ class expSmoothing_prevAction(model.Model):
         stimuli,
         stim_side,
         single_zeta,
+        repetition_bias=False,
+        with_choice_trace=False,
     ):
-        name = "actKernel" + "_single_zeta" * single_zeta
+        name = "actKernel" + "_single_zeta" * single_zeta + "_with_repBias" * repetition_bias + "_with_choiceTrace" * with_choice_trace
+        if with_choice_trace:
+            if (not repetition_bias) or (not single_zeta):
+                raise AssertionError('repBias must be True if choice trace is True')
+
         self.single_zeta = single_zeta
         nb_params = 4 + (not single_zeta) * 1
         lb_params, ub_params = np.zeros(nb_params), np.concatenate(
@@ -35,6 +41,18 @@ class expSmoothing_prevAction(model.Model):
                 np.array([0.02, 0.02]),
             )
         )
+
+        self.repetition_bias = repetition_bias
+        if repetition_bias:
+            lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, 0.5)
+            std_RW = np.append(std_RW, 0.01)
+            nb_params += 1
+        self.with_choice_trace = with_choice_trace
+        if with_choice_trace:
+            lb_params, ub_params = np.append(lb_params, 0), np.append(ub_params, 0.5)
+            std_RW = np.append(std_RW, 0.01)
+            nb_params += 1
+
         super().__init__(
             name,
             path_to_results,
@@ -63,12 +81,24 @@ class expSmoothing_prevAction(model.Model):
             values (array of shape [nb_sessions, nb_chains, nb_trials, 2]): prior for each chain and session
         """
         nb_chains = len(arr_params)
-        if self.single_zeta:
+        if self.with_choice_trace:
+            alpha, zeta, lapse_pos, lapse_neg, rep_bias, choice_trace_lr = torch.tensor(
+                arr_params, device=self.device, dtype=torch.float32
+            ).T
+        elif not self.repetition_bias and self.single_zeta:
             alpha, zeta, lapse_pos, lapse_neg = torch.tensor(
                 arr_params, device=self.device, dtype=torch.float32
             ).T
-        else:
+        elif self.repetition_bias and self.single_zeta:
+            alpha, zeta, lapse_pos, lapse_neg, rep_bias = torch.tensor(
+                arr_params, device=self.device, dtype=torch.float32
+            ).T
+        elif not self.repetition_bias and not self.single_zeta:
             alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg = torch.tensor(
+                arr_params, device=self.device, dtype=torch.float32
+            ).T
+        else:
+            alpha, zeta_pos, zeta_neg, lapse_pos, lapse_neg, rep_bias = torch.tensor(
                 arr_params, device=self.device, dtype=torch.float32
             ).T
         act, stim, side = (
@@ -82,6 +112,8 @@ class expSmoothing_prevAction(model.Model):
             torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2], dtype=torch.float32)
             + 0.5
         )
+        if self.with_choice_trace:
+            choice_trace = torch.zeros([nb_sessions, nb_chains, act.shape[-1], 2]) + 0.5
 
         if self.single_zeta:
             zeta_pos, zeta_neg = zeta, zeta
@@ -99,8 +131,18 @@ class expSmoothing_prevAction(model.Model):
                 ] + alpha * torch.unsqueeze(a_prev.T[act[:, t - 1] != 0], 1)
                 values[act[:, t - 1] == 0, :, t] = values[act[:, t - 1] == 0, :, t - 1]
 
+                # choice trace update
+                if self.with_choice_trace:
+                    a_prev = torch.stack([act[:, t - 1] == -1, act[:, t - 1] == 1]) * 1
+                    choice_trace[act[:, t - 1] != 0, :, t] = (1 - mut.unsqueeze(choice_trace_lr)) * choice_trace[
+                        act[:, t - 1] != 0, :, t - 1
+                    ] + mut.unsqueeze(choice_trace_lr) * torch.unsqueeze(a_prev.T[act[:, t - 1] != 0], 1)
+                    choice_trace[act[:, t - 1] == 0, :, t] = choice_trace[act[:, t - 1] == 0, :, t - 1]
+
+        rep_bias = None if not self.repetition_bias else rep_bias
         logp_ch, pActions, prediction_error = mut.compute_logp_ch_and_pe(
-            values[:, :, :, 1], stim, act, side, zetas, lapses, repetition_bias=None
+            values[:, :, :, 1], stim, act, side, zetas, lapses, repetition_bias=rep_bias,
+            choice_trace=None if not self.with_choice_trace else choice_trace,
         )
 
         if return_details:
