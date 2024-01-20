@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
-from prior_pipelines.decoding.functions.utils import load_metadata
-from prior_pipelines.params import CACHE_PATH
-from prior_pipelines.params import BEH_MOD_PATH as BEHAVIOR_MOD_PATH
+try:
+    from braindelphi.decoding.functions.utils import load_metadata
+    from braindelphi.params import CACHE_PATH
+    from braindelphi.params import BEH_MOD_PATH as BEHAVIOR_MOD_PATH
+except:
+    from prior_pipelines.decoding.functions.utils import load_metadata
+    from prior_pipelines.params import CACHE_PATH
+    from prior_pipelines.params import BEH_MOD_PATH as BEHAVIOR_MOD_PATH
 from tqdm import tqdm
 import pickle
 from pathlib import Path
@@ -79,8 +84,15 @@ def get_data_cv(eid_files):
 modality = 'ephys' # 'ephys'
 assert(modality in ['widefield', 'ephys'])
 
-CACHE_PATH = Path('/Users/csmfindling/Documents/Postdoc-Geneva/IBL/code/prior-original-pipeline/prior_pipelines/cache')
-bwmdf, _ = load_metadata(CACHE_PATH.joinpath("*_%s_metadata.pkl" % modality).as_posix())
+try:
+    #mypath = "/home/share/pouget_lab/cache_final/2023-12-22 09:43:59.319410_ephys_metadata_BWM_merged_final.pkl"
+    mypath = "/home/share/pouget_lab/cache_final/2023-12-25 10:10:17.809664_ephys_metadata_BWM_unmerged_final.pkl"
+    bwmdf = pickle.load(open(mypath, "rb"))
+except:
+    CACHE_PATH = Path(
+        '/Users/csmfindling/Documents/Postdoc-Geneva/IBL/code/prior-original-pipeline/prior_pipelines/cache')
+    bwmdf, _ = load_metadata(CACHE_PATH.joinpath("*_%s_metadata.pkl" % modality).as_posix())
+
 
 outlist = []
 failed = 0

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=decoding
-#SBATCH --output=logs/slurm/decoding.%A.%a.out
-#SBATCH --error=logs/slurm/decoding.%A.%a.err
+#SBATCH --job-name=behavior
+#SBATCH --output=logs/slurm/behavior.%A.%a.out
+#SBATCH --error=logs/slurm/behavior.%A.%a.err
 #SBATCH --partition=public-cpu
 #SBATCH --array=1-140
 #SBATCH --mem=7000
