@@ -2,9 +2,6 @@ from behavior_models.models import model, utils
 import torch
 import numpy as np
 from behavior_models.models import utils as mut
-from iblutil.util import setup_logger
-
-logger = setup_logger("ibl")
 
 unsqueeze = lambda x: torch.unsqueeze(torch.unsqueeze(x, 0), -1)
 
