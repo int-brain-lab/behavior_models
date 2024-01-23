@@ -5,7 +5,7 @@
 #SBATCH --partition=public-cpu
 #SBATCH --array=1-140
 #SBATCH --mem=7000
-#SBATCH --time=72:00:00
+#SBATCH --time=96:00:00
 # 1300/4=325
 
 # source /home/users/f/findling/.bash_profile
