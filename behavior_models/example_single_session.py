@@ -1,5 +1,5 @@
 import numpy as np
-from behavior_models import models
+from models import ActionKernel_priorWeighted
 
 from one.api import ONE
 import brainbox.io.one as bbone
@@ -11,7 +11,7 @@ one.load_object(eid, 'trials')
 sl = bbone.SessionLoader(one=one, eid=eid)
 sl.load_trials()
 # instantiate model
-my_model = models.ActionKernel(path_to_results="results_behavioral", session_uuids=eid, df_trials=sl.trials, single_zeta=False)
+my_model = ActionKernel_priorWeighted(path_to_results="results_behavioral", session_uuids=eid, df_trials=sl.trials, single_zeta=True)
 
 # train - this will save data in the current directory
 my_model.load_or_train(remove_old=False, adaptive=True)
