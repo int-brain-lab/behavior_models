@@ -855,15 +855,15 @@ class ActionKernel_priorWeighted(base_models.PriorModel):
             return act_sim, stim, side
         
 
-class ActionKernel_learningRateWeighted(base_models.PriorModel):
+class ActionKernel_adaptedLearningRate(base_models.PriorModel):
     """
     Model where the prior is based on an exponential estimation of the previous stimulus side
     """
 
-    name = "actKernel_learningRateWeighted"
+    name = "actKernel_adaptedLearningRate"
 
     def __init__(self, *args, single_zeta=True, repetition_bias=None, **kwargs):
-        self.name = "actKernel_learningRateWeighted" + "_single_zeta" * single_zeta
+        self.name = "actKernel_adaptedLearningRate" + "_single_zeta" * single_zeta
         self.single_zeta = single_zeta
         nb_params = 5 + (not single_zeta) * 1
         lb_params, ub_params = np.zeros(nb_params), np.concatenate(
@@ -877,7 +877,7 @@ class ActionKernel_learningRateWeighted(base_models.PriorModel):
             )
         )
         self.repetition_bias = None  # this model can't have a repetition bias
-        super(ActionKernel_learningRateWeighted, self).__init__(*args, nb_params=nb_params, lb_params=lb_params, ub_params=ub_params,  std_RW=std_RW, **kwargs)
+        super(ActionKernel_adaptedLearningRate, self).__init__(*args, nb_params=nb_params, lb_params=lb_params, ub_params=ub_params,  std_RW=std_RW, **kwargs)
 
 
     def compute_lkd(self, arr_params, act, stim, side, return_details):
